@@ -15,8 +15,12 @@ const SEL = {
   chatTitle:      '[data-testid="conversation-info-header-chat-title"]',
   menuBtn:        '[data-testid="conversation-header"] [aria-label="Menu"][data-tab="6"]',
   dropdownMenu:   '[role="menu"]',
+  // sidebarFull = full left panel incl. header/search bar (position:relative overflow:hidden)
+  // leftPanel   = only the scrolling chat list inside it — DO NOT break overflow:auto on this
+  sidebarFull:    '#side',
   leftPanel:      '#pane-side',
   chatList:       '[data-testid="chat-list"]',
+  chatListItem:   '[data-testid="cell-frame-container"]',
   bubbleOut:      '.message-out',
   bubbleIn:       '.message-in',
   bubbleBg:       '._amk6',
@@ -61,6 +65,8 @@ function getDefaults() {
     blurSidebar:          false,
     sidebarBlurIntensity: 8,
     sidebarColor:         null,
+    chatListBgColor:      '#1d1f1f',
+    chatListOpacity:      100,
   };
 }
 
@@ -127,6 +133,24 @@ function applyGlobalCSS() {
   }
   if (s.sidebarColor && !s.sidebarWallpaper) {
     css += `${SEL.leftPanel} { background-color:${s.sidebarColor}!important; }\n`;
+  }
+
+  // Chat card transparency — targets the cell container AND the inner content
+  // wrapper where WA applies the actual surface colour.
+  // ._ak73 = currently selected chat (has its own bg on the container).
+  // Non-selected items carry their bg on an inner child div.
+  // We target both levels with !important to win the specificity fight.
+  if ((s.chatListOpacity ?? 100) < 100 || s.chatListBgColor) {
+    const alpha = (s.chatListOpacity ?? 100) / 100;
+    const base  = s.chatListBgColor || '#1d1f1f';
+    const rgba  = hexToRgba(base, alpha);
+    css += `
+      [data-testid="cell-frame-container"],
+      [data-testid="cell-frame-container"] > div,
+      [data-testid="cell-frame-container"] > div > div {
+        background-color: ${rgba} !important;
+      }
+    \n`;
   }
 
   styleEl.textContent = css;
@@ -274,6 +298,14 @@ function suppressWABackground(on) {
 
 // ---------------------------------------------------------------------------
 // SIDEBAR BACKGROUND
+// KEY INSIGHT: position:absolute overlays inside overflow:auto scroll WITH
+// the content. Fix:
+//   - Images  → apply background-image directly on #pane-side. CSS backgrounds
+//               on an element are fixed to the element's box, not scrollable.
+//               Blur via injected ::before pseudo-element rule.
+//   - Video   → position:sticky + negative margin trick keeps it in viewport
+//               while the list scrolls over it.
+// No stacking CSS, no overflow mutation, no scroll breakage.
 // ---------------------------------------------------------------------------
 function applySidebarBackground() {
   removeSidebarBackground();
@@ -281,62 +313,101 @@ function applySidebarBackground() {
   if (!wp) return;
 
   const pane = document.querySelector(SEL.leftPanel);
-  if (!pane) return;
+  if (!pane) { console.warn('[WA Themes] #pane-side not found'); return; }
 
-  pane.style.position = 'relative';
-  pane.style.overflow = 'hidden';
-
-  const overlay = document.createElement('div');
-  overlay.id = 'wa-theme-sidebar-overlay';
-  overlay.style.cssText = 'position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;';
-
-  const blurPx = globalSettings.sidebarBlurIntensity || 8;
+  const blurPx  = globalSettings.sidebarBlurIntensity || 8;
+  const doBlur  = globalSettings.blurSidebar;
+  const tintA   = (globalSettings.sidebarTintOpacity ?? 0) / 100;
+  const tintCol = globalSettings.sidebarTintColor || '#111b21';
 
   if (wp.type === 'image') {
-    overlay.style.backgroundImage    = `url(${wp.data})`;
-    overlay.style.backgroundSize     = 'cover';
-    overlay.style.backgroundPosition = 'center';
-    if (globalSettings.blurSidebar) {
-      overlay.style.filter = `blur(${blurPx}px)`;
-      overlay.style.transform = 'scale(1.05)';
-    }
+    // Apply directly on pane — CSS bg never scrolls with content
+    pane.style.setProperty('background-image',    `url(${wp.data})`);
+    pane.style.setProperty('background-size',     'cover');
+    pane.style.setProperty('background-position', 'center');
+    pane.style.setProperty('background-repeat',   'no-repeat');
+
+    // Blur + tint: inject a ::before rule (can't blur inline bg directly)
+    const styleEl = document.createElement('style');
+    styleEl.id = 'wa-theme-sidebar-style';
+    styleEl.textContent = `
+      #pane-side { position: relative !important; }
+      #pane-side::before {
+        content: '';
+        position: absolute; inset: 0;
+        background: inherit;
+        z-index: 0; pointer-events: none;
+        ${doBlur ? `filter: blur(${blurPx}px); transform: scale(1.05);` : ''}
+        ${tintA > 0 ? `box-shadow: inset 0 0 0 9999px ${hexToRgba(tintCol, tintA)};` : ''}
+      }
+      #pane-side > *:not(#wa-theme-sidebar-video) {
+        position: relative !important; z-index: 1 !important;
+      }
+    `;
+    document.head.appendChild(styleEl);
+    sidebarOverlay = styleEl;   // track for cleanup
+
   } else if (wp.type === 'video') {
+    // Sticky trick: the wrapper sticks at top:0 while list scrolls over it.
+    // margin-bottom: -height collapses it out of flow so it doesn't push content.
+    const h = pane.clientHeight || 500;
+    const sticky = document.createElement('div');
+    sticky.id = 'wa-theme-sidebar-video';
+    sticky.style.cssText = `
+      position: sticky; top: 0;
+      height: ${h}px; margin-bottom: -${h}px;
+      z-index: 0; pointer-events: none; overflow: hidden; flex-shrink: 0;
+    `;
+
     const v = document.createElement('video');
     v.src=wp.data; v.autoplay=true; v.loop=true; v.muted=true; v.playsInline=true;
-    v.style.cssText=`position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
-      ${globalSettings.blurSidebar?`filter:blur(${blurPx}px);transform:scale(1.05);`:''}`;
-    overlay.appendChild(v);
+    v.style.cssText = `
+      width:100%; height:100%; object-fit:cover;
+      ${doBlur ? `filter:blur(${blurPx}px); transform:scale(1.05);` : ''}
+    `;
+    sticky.appendChild(v);
+
+    if (tintA > 0) {
+      const tint = document.createElement('div');
+      tint.style.cssText = `position:absolute;inset:0;pointer-events:none;
+        background-color:${hexToRgba(tintCol, tintA)};`;
+      sticky.appendChild(tint);
+    }
+
+    pane.insertBefore(sticky, pane.firstChild);
+    sidebarOverlay = sticky;
+
+    // Lift pane's other children above the video
+    const liftStyle = document.createElement('style');
+    liftStyle.id = 'wa-theme-sidebar-style';
+    liftStyle.textContent = `
+      #pane-side > *:not(#wa-theme-sidebar-video) {
+        position: relative !important; z-index: 1 !important;
+      }
+    `;
+    document.head.appendChild(liftStyle);
   }
 
-  // Fog / tint layer on top of wallpaper
-  const tintAlpha = (globalSettings.sidebarTintOpacity ?? 0) / 100;
-  if (tintAlpha > 0) {
-    const tint = document.createElement('div');
-    tint.style.cssText = `position:absolute;inset:0;pointer-events:none;
-      background-color:${hexToRgba(globalSettings.sidebarTintColor || '#111b21', tintAlpha)};`;
-    overlay.appendChild(tint);
-  }
-
-  pane.insertBefore(overlay, pane.firstChild);
-  sidebarOverlay = overlay;
-  injectSidebarStackingCSS(true);
+  console.log('[WA Themes] sidebar wallpaper applied, type:', wp.type);
 }
 
 function removeSidebarBackground() {
-  sidebarOverlay?.remove(); sidebarOverlay = null;
-  injectSidebarStackingCSS(false);
-}
-
-function injectSidebarStackingCSS(on) {
+  // Remove sticky video element if present
+  document.getElementById('wa-theme-sidebar-video')?.remove();
+  // Remove style tag (blur/tint/lift CSS)
+  document.getElementById('wa-theme-sidebar-style')?.remove();
+  // Remove inline bg from pane if image was applied
+  const pane = document.querySelector(SEL.leftPanel);
+  if (pane) {
+    pane.style.removeProperty('background-image');
+    pane.style.removeProperty('background-size');
+    pane.style.removeProperty('background-position');
+    pane.style.removeProperty('background-repeat');
+  }
+  sidebarOverlay = null;
+  // Clean up any legacy IDs from older versions
   document.getElementById('wa-theme-sidebar-z')?.remove();
-  if (!on) return;
-  const s = document.createElement('style');
-  s.id = 'wa-theme-sidebar-z';
-  s.textContent = `
-    #pane-side { position:relative!important; overflow:hidden!important; }
-    #pane-side > *:not(#wa-theme-sidebar-overlay) { position:relative!important; z-index:1!important; }
-  `;
-  document.head.appendChild(s);
+  document.getElementById('wa-theme-sidebar-overlay')?.remove();
 }
 
 // ---------------------------------------------------------------------------
@@ -718,7 +789,7 @@ function showToast(message, type = 'success') {
 }
 
 // ---------------------------------------------------------------------------
-// MESSAGE LISTENER
+// MESSAGE LISTENER + STORAGE WATCHER
 // ---------------------------------------------------------------------------
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'SETTINGS_UPDATED') {
@@ -727,13 +798,26 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       reapplyBubbleColours();
       if (currentChatName) applyPerChatBackground(currentChatName);
       applySidebarBackground();
-      console.log('[WA Themes] settings refreshed');
+      console.log('[WA Themes] settings refreshed via message');
     });
     sendResponse({ ok: true }); return true;
   }
   if (msg.type === 'GET_CURRENT_CHAT') {
     sendResponse({ chatName: currentChatName }); return true;
   }
+});
+
+// Backup: also watch storage directly — fires even if message passing fails
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  if (!changes.globalSettings && !changes.chatWallpapers) return;
+  console.log('[WA Themes] storage changed — reapplying');
+  loadStorage().then(() => {
+    applyGlobalCSS();
+    reapplyBubbleColours();
+    if (currentChatName) applyPerChatBackground(currentChatName);
+    applySidebarBackground();
+  });
 });
 
 // ---------------------------------------------------------------------------

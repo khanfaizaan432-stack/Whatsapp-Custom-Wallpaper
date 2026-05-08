@@ -21,6 +21,8 @@ const DEFAULTS = {
   blurSidebar:          false,
   sidebarBlurIntensity: 8,
   sidebarColor:         '#111b21',
+  chatListBgColor:      '#1d1f1f',
+  chatListOpacity:      100,
 };
 
 let settings          = { ...DEFAULTS };
@@ -82,6 +84,8 @@ function renderSettings() {
   chk('blurSidebar',         s.blurSidebar          ?? false);
   rng('sidebarBlurIntensity',s.sidebarBlurIntensity ?? 8,   'sidebarBlurVal',    'px');
   val('sidebarColor',        s.sidebarColor         || DEFAULTS.sidebarColor);
+  val('chatListBgColor',     s.chatListBgColor      || DEFAULTS.chatListBgColor);
+  rng('chatListOpacity',     s.chatListOpacity      ?? 100, 'chatListOpacityVal', '%');
   chk('globalWpBlur',        s.globalWallpaper?.blur ?? false);
 
   if (s.globalWallpaper)  renderPreview('global-wp-preview',  'global-wp-placeholder',  s.globalWallpaper);
@@ -121,6 +125,8 @@ function readSettings() {
     blurSidebar:          g('blurSidebar').checked,
     sidebarBlurIntensity: parseInt(getVal('sidebarBlurIntensity')),
     sidebarColor:         getVal('sidebarColor'),
+    chatListBgColor:      getVal('chatListBgColor'),
+    chatListOpacity:      parseInt(getVal('chatListOpacity')),
   };
 }
 
@@ -148,6 +154,7 @@ function setupListeners() {
   liveRange('blurIntensity',       'blurVal',           'px');
   liveRange('sidebarTintOpacity',  'sidebarTintVal',    '%');
   liveRange('sidebarBlurIntensity','sidebarBlurVal',    'px');
+  liveRange('chatListOpacity',     'chatListOpacityVal', '%');
   liveRange('fontSize',            'fontSizeVal',       'px');
 
   document.querySelectorAll('.reset-btn').forEach(btn => {
