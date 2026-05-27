@@ -108,15 +108,26 @@
       </div>
     </section>
 
-    <!-- HEADER -->
+    <!-- HEADER BAR — conversation header only (top bar when a chat is open) -->
     <section>
-      <div class="section-title">🎨 Header Bar</div>
+      <div class="section-title">🎨 Conversation Header</div>
+      <div class="hint-text">Top bar shown when a chat is open. Set opacity &lt; 100% to let a chat wallpaper show through.</div>
       <div class="row">
         <label>Colour</label>
         <div class="color-row">
           <input type="color" id="headerColor" value="#202c33">
           <button class="reset-btn" data-target="headerColor" data-default="#202c33">↺</button>
         </div>
+      </div>
+      <div class="row">
+        <label>Opacity</label>
+        <input type="range" id="convHeaderOpacity" min="0" max="100" value="100" step="1">
+        <span class="range-label"><span id="convHeaderOpacityVal">100</span>%</span>
+      </div>
+      <div class="row">
+        <label>Blur <span class="sub-hint">(backdrop)</span></label>
+        <input type="range" id="convHeaderBlur" min="0" max="30" value="0" step="1">
+        <span class="range-label"><span id="convHeaderBlurVal">0</span>px</span>
       </div>
     </section>
 
@@ -143,8 +154,12 @@
     <!-- SIDE PANEL -->
     <section>
       <div class="section-title">📱 Side Panel</div>
-      <div class="hint-text">Wallpaper, tint, and blur for the chat list.</div>
+      <div class="hint-text">
+        Wallpaper applies to the <strong>entire left panel</strong> — the nav strip, chatlist header, and chat list all sit on top of it.
+        Reduce header opacity below to let the wallpaper show through.
+      </div>
 
+      <!-- Sidebar wallpaper upload -->
       <div id="sidebar-wp-preview" class="media-preview">
         <span id="sidebar-wp-placeholder">No wallpaper set</span>
       </div>
@@ -158,6 +173,7 @@
 
       <div class="sub-divider"></div>
 
+      <!-- Fog / tint -->
       <div class="row">
         <label>Fog / tint colour</label>
         <input type="color" id="sidebarTintColor" value="#111b21">
@@ -182,6 +198,7 @@
 
       <div class="sub-divider"></div>
 
+      <!-- Solid colour fallback (no wallpaper) -->
       <div class="row">
         <label>Solid colour <span class="sub-hint">(no wallpaper)</span></label>
         <div class="color-row">
@@ -192,20 +209,91 @@
 
       <div class="sub-divider"></div>
 
+      <!-- ── NAV STRIP ─────────────────────────────────────────────────────── -->
       <div style="font-size:11px;color:#00a884;font-weight:600;text-transform:uppercase;
-                  letter-spacing:.5px;margin-bottom:8px;">💬 Chat Card Transparency</div>
+                  letter-spacing:.5px;margin-bottom:8px;">🗂️ Nav Strip</div>
       <div class="hint-text" style="margin-bottom:8px;">
-        Controls opacity of individual chat cards. Reduce to let wallpaper show through.
+        The leftmost icon panel (Chats / Status / Channels). Set opacity to 0 for full transparency.
+      </div>
+      <div class="row">
+        <label>Colour</label>
+        <div class="color-row">
+          <input type="color" id="navStripColor" value="#202c33">
+          <button class="reset-btn" data-target="navStripColor" data-default="#202c33">↺</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Opacity</label>
+        <input type="range" id="navStripOpacity" min="0" max="100" value="100" step="1">
+        <span class="range-label"><span id="navStripOpacityVal">100</span>%</span>
+      </div>
+      <div class="row">
+        <label>Blur <span class="sub-hint">(backdrop)</span></label>
+        <input type="range" id="navStripBlur" min="0" max="30" value="0" step="1">
+        <span class="range-label"><span id="navStripBlurVal">0</span>px</span>
+      </div>
+
+      <div class="sub-divider"></div>
+
+      <!-- ── CHATLIST HEADER TRANSPARENCY ────────────────────────────────── -->
+      <div style="font-size:11px;color:#00a884;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.5px;margin-bottom:8px;">🔝 Chatlist Header</div>
+      <div class="hint-text" style="margin-bottom:8px;">
+        The bar at the top of the sidebar (green by default). Reduce opacity to let the sidebar wallpaper show through.
+      </div>
+      <div class="row">
+        <label>Colour</label>
+        <div class="color-row">
+          <input type="color" id="chatlistHeaderColor" value="#202c33">
+          <button class="reset-btn" data-target="chatlistHeaderColor" data-default="#202c33">↺</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Opacity</label>
+        <input type="range" id="chatlistHeaderOpacity" min="0" max="100" value="100" step="1">
+        <span class="range-label"><span id="chatlistHeaderOpacityVal">100</span>%</span>
+      </div>
+      <div class="row">
+        <label>Blur <span class="sub-hint">(backdrop)</span></label>
+        <input type="range" id="chatlistHeaderBlur" min="0" max="30" value="0" step="1">
+        <span class="range-label"><span id="chatlistHeaderBlurVal">0</span>px</span>
+      </div>
+
+      <div class="sub-divider"></div>
+
+      <!-- ── CHAT CARD STYLE ───────────────────────────────────────────── -->
+      <div style="font-size:11px;color:#00a884;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.5px;margin-bottom:8px;">💬 Chat Cards</div>
+      <div class="hint-text" style="margin-bottom:8px;">
+        Background of each conversation row. Reduce opacity to let the sidebar wallpaper show through.
       </div>
       <div class="row">
         <label>Card colour</label>
-        <input type="color" id="chatListBgColor" value="#1d1f1f">
+        <div class="color-row">
+          <input type="color" id="chatCardBgColor" value="#1d1f1f">
+          <button class="reset-btn" data-target="chatCardBgColor" data-default="#1d1f1f">↺</button>
+        </div>
       </div>
       <div class="row">
-        <label>Card opacity</label>
-        <input type="range" id="chatListOpacity" min="0" max="100" value="100" step="1">
-        <span class="range-label"><span id="chatListOpacityVal">100</span>%</span>
+        <label>Opacity</label>
+        <input type="range" id="chatCardOpacity" min="0" max="100" value="100" step="1">
+        <span class="range-label"><span id="chatCardOpacityVal">100</span>%</span>
       </div>
+      <div class="row">
+        <label>Blur card <span class="sub-hint">(glass)</span></label>
+        <label class="toggle small">
+          <input type="checkbox" id="chatCardBlur">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="row">
+        <label>Blur intensity</label>
+        <input type="range" id="chatCardBlurIntensity" min="2" max="20" value="4" step="1">
+        <span class="range-label"><span id="chatCardBlurIntensityVal">4</span>px</span>
+      </div>
+
+      <div class="sub-divider"></div>
+
     </section>
 
     <div class="action-area">
