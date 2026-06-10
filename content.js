@@ -130,6 +130,48 @@ function base64ToBlob(dataUrl, fallbackMime) {
 }
 
 // ---------------------------------------------------------------------------
+// INDEXEDDB VIDEO STORAGE
+// chrome.storage.local has a 5MB per-item hard cap — useless for video files.
+// IndexedDB has no meaningful size limit in Chrome. All video blobs go here.
+// The storageKey in globalSettings/chatSettings is the IDB record key.
+// ---------------------------------------------------------------------------
+let _idb = null;
+async function openVideoDB() {
+  if (_idb) return _idb;
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('wa-themes-videos', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('videos');
+    req.onsuccess       = e => { _idb = e.target.result; resolve(_idb); };
+    req.onerror         = e => reject(e.target.error);
+  });
+}
+async function idbGet(key) {
+  const db = await openVideoDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction('videos', 'readonly').objectStore('videos').get(key);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror   = () => reject(req.error);
+  });
+}
+async function idbSet(key, value) {
+  const db = await openVideoDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction('videos', 'readwrite').objectStore('videos').put(value, key);
+    req.onsuccess = () => resolve();
+    req.onerror   = () => reject(req.error);
+  });
+}
+async function idbDelete(key) {
+  if (!key) return;
+  const db = await openVideoDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction('videos', 'readwrite').objectStore('videos').delete(key);
+    req.onsuccess = () => resolve();
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // OBJECT URL MANAGEMENT
 // ---------------------------------------------------------------------------
 function trackUrl(key, url) {
@@ -144,25 +186,37 @@ function revokeUrl(key) {
   }
 }
 
-// Reads Uint8Array from chrome.storage.local, creates a Blob, returns an objectURL.
-// Re-uses existing URL for the same key to avoid unnecessary revocations.
+// Reads video from IDB (new path) or chrome.storage.local (legacy fallback),
+// creates a Blob URL, and caches it for the lifetime of the page.
 async function getVideoObjectUrl(storageKey) {
   if (activeObjectUrls[storageKey]) return activeObjectUrls[storageKey];
   try {
-    const result = await chrome.storage.local.get(storageKey);
-    const data   = result[storageKey];
+    // Try IDB first (all new uploads go here, no size limit)
+    let data = await idbGet(storageKey);
+
+    // Legacy fallback: old videos stored in chrome.storage.local (<5MB)
     if (!data) {
-      console.warn('[WA Themes] Video data not found in storage for key:', storageKey);
+      const result = await chrome.storage.local.get(storageKey);
+      data = result[storageKey] ?? null;
+    }
+
+    if (!data) {
+      console.warn('[WA Themes] Video not found for key:', storageKey);
       return null;
     }
-    // data may be a Uint8Array or a plain object (after JSON round-trip); handle both
-    const buffer = data.buffer ?? (data instanceof Uint8Array ? data.buffer : new Uint8Array(Object.values(data)).buffer);
+
+    // Normalise to ArrayBuffer — stored value may be Uint8Array or plain object after JSON round-trip
+    let buffer;
+    if (data instanceof Uint8Array) buffer = data.buffer;
+    else if (data.buffer)           buffer = data.buffer;
+    else                            buffer = new Uint8Array(Object.values(data)).buffer;
+
     const blob = new Blob([buffer], { type: 'video/mp4' });
     const url  = URL.createObjectURL(blob);
     trackUrl(storageKey, url);
     return url;
   } catch (err) {
-    console.error('[WA Themes] Failed to get video from storage:', storageKey, err);
+    console.error('[WA Themes] Failed to load video:', storageKey, err);
     return null;
   }
 }
@@ -212,39 +266,43 @@ async function loadStorage() {
 async function migrateBase64Videos() {
   let dirty = false;
 
+  // Helper: returns true only if value is a base64 data-URL string — skips
+  // Uint8Arrays, plain objects, or blob URLs that may be left from prior runs.
+  const isBase64DataUrl = v => typeof v === 'string' && v.startsWith('data:');
+
   // --- Global wallpaper ---
   const gw = globalSettings.globalWallpaper;
-  if (gw?.type === 'video' && gw?.data) {
+  if (gw?.type === 'video' && isBase64DataUrl(gw?.data)) {
     try {
       const key = 'wa_vid_global';
       const ab  = await base64ToBlob(gw.data, 'video/mp4').arrayBuffer();
-      await chrome.storage.local.set({ [key]: new Uint8Array(ab) });
+      await idbSet(key, new Uint8Array(ab));
       globalSettings.globalWallpaper = { type: 'video', storageKey: key };
       dirty = true;
-      console.log('[WA Themes] Migrated global video → storage key');
+      console.log('[WA Themes] Migrated global video → IDB');
     } catch (e) { console.error('[WA Themes] Migration failed (global):', e); }
   }
 
   // --- Sidebar wallpaper ---
   const sw = globalSettings.sidebarWallpaper;
-  if (sw?.type === 'video' && sw?.data) {
+  if (sw?.type === 'video' && isBase64DataUrl(sw?.data)) {
     try {
       const key = 'wa_vid_sidebar';
       const ab  = await base64ToBlob(sw.data, 'video/mp4').arrayBuffer();
-      await chrome.storage.local.set({ [key]: new Uint8Array(ab) });
+      await idbSet(key, new Uint8Array(ab));
       globalSettings.sidebarWallpaper = { type: 'video', storageKey: key };
       dirty = true;
-      console.log('[WA Themes] Migrated sidebar video → storage key');
+      console.log('[WA Themes] Migrated sidebar video → IDB');
     } catch (e) { console.error('[WA Themes] Migration failed (sidebar):', e); }
   }
 
   // --- Per-chat wallpapers ---
   for (const [chatName, cs] of Object.entries(chatSettings)) {
-    if (cs.wallpaperType === 'video' && cs.wallpaperData) {
+    if (cs.wallpaperType === 'video' && isBase64DataUrl(cs.wallpaperData)) {
       try {
         const key = `wa_vid_chat_${genId()}`;
         const ab  = await base64ToBlob(cs.wallpaperData, 'video/mp4').arrayBuffer();
-        await chrome.storage.local.set({ [key]: new Uint8Array(ab) });
+        await idbSet(key, new Uint8Array(ab));
         chatSettings[chatName] = { ...cs, wallpaperData: null, wallpaperStorageKey: key };
         dirty = true;
         console.log('[WA Themes] Migrated per-chat video:', chatName);
@@ -327,39 +385,38 @@ function applyGlobalCSS() {
   }
 
   // ── Nav strip (leftmost icon panel — Chats/Status/Channels) ─────────────
-  // This is [data-testid="chatlist-header"] sitting outside #side (width ~64px).
-  // When wallpaper is active this block is overridden to transparent below.
+  // [data-testid="chatlist-header"] is the nav strip header itself. Its direct
+  // parent is an anonymous wrapper div (bg:rgb(29,31,31)) — targeted via :has().
+  // When wallpaper is active these are overridden to transparent below.
   {
     const color  = s.navStripColor   || '#202c33';
     const alpha  = (s.navStripOpacity ?? 100) / 100;
     const blurPx = s.navStripBlur    ?? 0;
-    css += `[data-testid="chatlist-header"] {\n`;
-    css += `  background-color: ${hexToRgba(color, alpha)} !important;\n`;
+    const rgba   = hexToRgba(color, alpha);
+    // Target the wrapper div (direct parent of chatlist-header) via :has()
+    css += `div:has(> [data-testid="chatlist-header"]) { background-color: ${rgba} !important; }\n`;
+    css += `[data-testid="chatlist-header"] { background-color: ${rgba} !important;\n`;
     if (blurPx > 0) {
       css += `  backdrop-filter: blur(${blurPx}px) saturate(1.5) !important;\n`;
       css += `  -webkit-backdrop-filter: blur(${blurPx}px) saturate(1.5) !important;\n`;
     }
     css += `}\n`;
-    // Propagate to all nested children (they have their own backgrounds)
-    css += `[data-testid="chatlist-header"] * { background-color: ${hexToRgba(color, alpha)} !important; }\n`;
+    css += `[data-testid="chatlist-header"] * { background-color: ${rgba} !important; }\n`;
   }
 
   // ── Sidebar ───────────────────────────────────────────────────────────────
   if (s.sidebarColor && !s.sidebarWallpaper) {
-    // Solid colour only when no wallpaper is active — apply to #side itself
     css += `${SEL.sidebarFull} { background-color:${s.sidebarColor}!important; }\n`;
   }
   if (s.sidebarWallpaper) {
-    // Wallpaper is on the parent container — make every layer inside transparent
     css += `${SEL.sidebarFull} { background-color: transparent !important; }\n`;
     css += `${SEL.leftPanel}   { background-color: transparent !important; }\n`;
-    // Search bar (height 48px, index 0) and filter tab bar (height 42px, index 2)
-    // are direct children of #side with no stable id/testid — nuke by structure
     css += `#side > div:not(#pane-side) { background-color: transparent !important; }\n`;
-    // Left nav strip — nuke the element itself AND all opaque nested children
-    css += `[data-testid="chatlist-header"],
+    // Nav strip header + its wrapper div + all descendants → transparent
+    css += `div:has(> [data-testid="chatlist-header"]),
+            [data-testid="chatlist-header"],
             [data-testid="chatlist-header"] *
-            { background-color: transparent !important; }\n`;
+            { background-color: transparent !important; background-image: none !important; }\n`;
   }
 
   // ── Chat cards ────────────────────────────────────────────────────────────
@@ -669,6 +726,7 @@ async function applySidebarBackground() {
   const transparencyCss = `
     #side,
     ${SEL.leftPanel},
+    div:has(> [data-testid="chatlist-header"]),
     [data-testid="chatlist-header"],
     [data-testid="chatlist-header"] *,
     #side > div:not(#pane-side),

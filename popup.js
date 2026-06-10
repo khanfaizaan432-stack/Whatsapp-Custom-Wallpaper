@@ -64,6 +64,45 @@ let pendingSidebarWp = null;
 const popupObjectUrls = [];
 
 // ---------------------------------------------------------------------------
+// INDEXEDDB VIDEO STORAGE (mirrors content.js — same DB, same store)
+// ---------------------------------------------------------------------------
+let _idb = null;
+async function openVideoDB() {
+  if (_idb) return _idb;
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('wa-themes-videos', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('videos');
+    req.onsuccess       = e => { _idb = e.target.result; resolve(_idb); };
+    req.onerror         = e => reject(e.target.error);
+  });
+}
+async function idbGet(key) {
+  const db = await openVideoDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction('videos', 'readonly').objectStore('videos').get(key);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror   = () => reject(req.error);
+  });
+}
+async function idbSet(key, value) {
+  const db = await openVideoDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction('videos', 'readwrite').objectStore('videos').put(value, key);
+    req.onsuccess = () => resolve();
+    req.onerror   = () => reject(req.error);
+  });
+}
+async function idbDelete(key) {
+  if (!key) return;
+  const db = await openVideoDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction('videos', 'readwrite').objectStore('videos').delete(key);
+    req.onsuccess = () => resolve();
+    req.onerror   = () => reject(req.error);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
@@ -112,11 +151,18 @@ function makeAndTrackObjectUrl(blob) {
 async function resolveVideoPreviewUrl(storageKey) {
   if (!storageKey) return null;
   try {
-    const result = await chrome.storage.local.get(storageKey);
-    const data   = result[storageKey];
+    // IDB first (all new uploads), chrome.storage.local fallback (legacy)
+    let data = await idbGet(storageKey);
+    if (!data) {
+      const result = await chrome.storage.local.get(storageKey);
+      data = result[storageKey] ?? null;
+    }
     if (!data) return null;
-    const buffer = data.buffer ?? new Uint8Array(Object.values(data)).buffer;
-    const blob   = new Blob([buffer], { type: 'video/mp4' });
+    let buffer;
+    if (data instanceof Uint8Array) buffer = data.buffer;
+    else if (data.buffer)           buffer = data.buffer;
+    else                            buffer = new Uint8Array(Object.values(data)).buffer;
+    const blob = new Blob([buffer], { type: 'video/mp4' });
     return makeAndTrackObjectUrl(blob);
   } catch (e) {
     console.error('[WA Themes popup] resolveVideoPreviewUrl failed:', e);
@@ -344,9 +390,11 @@ function setupListeners() {
   // ── Apply / Reset ────────────────────────────────────────────────────────
   g('applyBtn').addEventListener('click', applyAndNotify);
   g('resetAllBtn').addEventListener('click', async () => {
-    // Clean up any stored video blobs before resetting
-    if (settings.globalWallpaper?.storageKey)  await chrome.storage.local.remove(settings.globalWallpaper.storageKey);
-    if (settings.sidebarWallpaper?.storageKey) await chrome.storage.local.remove(settings.sidebarWallpaper.storageKey);
+    // Delete stored video blobs from IDB (and legacy chrome.storage.local)
+    const gk = settings.globalWallpaper?.storageKey;
+    const sk = settings.sidebarWallpaper?.storageKey;
+    if (gk) { await idbDelete(gk).catch(() => {}); await chrome.storage.local.remove(gk).catch(() => {}); }
+    if (sk) { await idbDelete(sk).catch(() => {}); await chrome.storage.local.remove(sk).catch(() => {}); }
     settings = { ...DEFAULTS };
     pendingGlobalWp = null; pendingSidebarWp = null;
     await renderSettings();
@@ -364,13 +412,12 @@ async function applyAndNotify() {
     const key = settings.globalWallpaper?.storageKey || ('wa_vid_global_' + Date.now().toString(36));
     try {
       const ab = await pendingGlobalWp.file.arrayBuffer();
-      await chrome.storage.local.set({ [key]: new Uint8Array(ab) });
-      // globalWallpaper will be written by readSettingsFromUI using this key
+      await idbSet(key, new Uint8Array(ab));
       settings.globalWallpaper = { type: 'video', storageKey: key };
-      pendingGlobalWp = null; // neutralise so readSettingsFromUI doesn't see 'video' pending
+      pendingGlobalWp = null;
     } catch (e) {
       console.error('[WA Themes popup] Global video save failed:', e);
-      showPopupStatus('Video save failed — file may be too large.', true);
+      showPopupStatus('Video save failed.', true);
       return;
     }
   }
@@ -379,22 +426,26 @@ async function applyAndNotify() {
     const key = settings.sidebarWallpaper?.storageKey || ('wa_vid_sidebar_' + Date.now().toString(36));
     try {
       const ab = await pendingSidebarWp.file.arrayBuffer();
-      await chrome.storage.local.set({ [key]: new Uint8Array(ab) });
+      await idbSet(key, new Uint8Array(ab));
       settings.sidebarWallpaper = { type: 'video', storageKey: key };
       pendingSidebarWp = null;
     } catch (e) {
       console.error('[WA Themes popup] Sidebar video save failed:', e);
-      showPopupStatus('Video save failed — file may be too large.', true);
+      showPopupStatus('Video save failed.', true);
       return;
     }
   }
 
   // 2. Handle explicit removal — delete stored blob if applicable
   if (pendingGlobalWp?.type === '__removed__' && settings.globalWallpaper?.storageKey) {
-    await chrome.storage.local.remove(settings.globalWallpaper.storageKey);
+    const k = settings.globalWallpaper.storageKey;
+    await idbDelete(k).catch(() => {});
+    await chrome.storage.local.remove(k).catch(() => {});
   }
   if (pendingSidebarWp?.type === '__removed__' && settings.sidebarWallpaper?.storageKey) {
-    await chrome.storage.local.remove(settings.sidebarWallpaper.storageKey);
+    const k = settings.sidebarWallpaper.storageKey;
+    await idbDelete(k).catch(() => {});
+    await chrome.storage.local.remove(k).catch(() => {});
   }
 
   // 3. Read the rest of the UI state
