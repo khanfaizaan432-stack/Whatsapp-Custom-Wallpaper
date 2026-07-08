@@ -2,6 +2,19 @@
 
 All notable changes to this extension are tracked here.
 
+## 1.7.1
+
+### Fixed
+
+- Added `content-sidebar-fallback.js` for Opera/Chromium WhatsApp Web side-panel styling when the existing sidebar selectors fail.
+- Side-panel fallback now targets `#side`, chat-list containers, navigation/header areas, and chat-list cards.
+- Supports sidebar image/video wallpaper, solid fallback colour, tint/fog, blur, nav strip colour, chatlist header colour, and chat-card colour.
+
+### Changed
+
+- Manifest now loads `content-sidebar-fallback.js` after the diagnostics content script.
+- Validator now checks sidebar fallback presence, manifest wiring, syntax, and key fallback markers.
+
 ## 1.7.0
 
 ### Added
