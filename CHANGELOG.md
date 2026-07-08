@@ -2,6 +2,20 @@
 
 All notable changes to this extension are tracked here.
 
+## 1.8.0
+
+### Added
+
+- `popup-wallpaper-controls.js` with wallpaper fit, position, zoom, dim, brightness, contrast, and saturation controls.
+- `content-wallpaper-controls.js` to apply wallpaper controls to the forced chat wallpaper overlay.
+- Wallpaper controls preview swatch in the popup.
+
+### Changed
+
+- Manifest now loads `content-wallpaper-controls.js`.
+- Popup now loads `popup-wallpaper-controls.js`.
+- Validator now checks wallpaper-control popup/content scripts and message hooks.
+
 ## 1.7.0
 
 ### Added
