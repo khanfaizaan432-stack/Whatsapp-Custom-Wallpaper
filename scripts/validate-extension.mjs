@@ -9,6 +9,8 @@ const requiredFiles = [
   'popup.html',
   'popup.css',
   'popup.js',
+  'options.html',
+  'options.js',
   'content.js',
   'content-patch.js',
   'content-repair-trigger.js',
@@ -44,7 +46,7 @@ const packageJson = readJson('package.json');
 if (manifest) {
   if (manifest.manifest_version !== 3) fail('manifest_version must be 3');
   if (!manifest.name) fail('manifest.name is required');
-  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.2.0');
+  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.3.0');
 
   const scripts = manifest.content_scripts?.flatMap(entry => entry.js || []) || [];
   for (const script of scripts) {
@@ -53,6 +55,9 @@ if (manifest) {
 
   const popup = manifest.action?.default_popup;
   if (popup && !fs.existsSync(path.join(root, popup))) fail(`Manifest references missing popup: ${popup}`);
+
+  const optionsPage = manifest.options_page;
+  if (optionsPage && !fs.existsSync(path.join(root, optionsPage))) fail(`Manifest references missing options page: ${optionsPage}`);
 
   const serviceWorker = manifest.background?.service_worker;
   if (serviceWorker && !fs.existsSync(path.join(root, serviceWorker))) {
@@ -73,7 +78,7 @@ if (manifest && packageJson && manifest.version !== packageJson.version) {
   fail(`manifest.json version (${manifest.version}) must match package.json version (${packageJson.version})`);
 }
 
-for (const file of ['popup.js', 'content.js', 'content-patch.js', 'content-repair-trigger.js', 'background.js']) {
+for (const file of ['popup.js', 'options.js', 'content.js', 'content-patch.js', 'content-repair-trigger.js', 'background.js']) {
   const fullPath = path.join(root, file);
   if (!fs.existsSync(fullPath)) continue;
   try {
