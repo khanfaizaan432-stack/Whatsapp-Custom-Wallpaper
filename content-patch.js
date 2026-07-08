@@ -1,5 +1,5 @@
 // =============================================================================
-// WhatsApp Themes — content-patch.js v1.1.0
+// WhatsApp Themes — content-patch.js v1.2.0
 // Runtime hardening loaded after content.js.
 //
 // This file intentionally does not replace content.js. It adds defensive fixes
@@ -63,21 +63,72 @@
     return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, Number(alpha) || 0))})`;
   }
 
+  function normalizeNumber(value, fallback, min, max) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.min(max, Math.max(min, n));
+  }
+
+  function normalizeColor(value, fallback) {
+    return typeof value === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)
+      ? value
+      : fallback;
+  }
+
+  function cleanInternalKeys(settings) {
+    if (!settings || typeof settings !== 'object') return {};
+    const cleaned = { ...settings };
+    delete cleaned.__repairTick;
+    delete cleaned.__repairReason;
+    return cleaned;
+  }
+
+  function normalizeGlobalSettings(settings) {
+    const s = cleanInternalKeys(settings);
+    return {
+      ...s,
+      enabled: s.enabled !== false,
+      outBubbleColor: normalizeColor(s.outBubbleColor, '#144d37'),
+      inBubbleColor: normalizeColor(s.inBubbleColor, '#242626'),
+      outBubbleOpacity: normalizeNumber(s.outBubbleOpacity, 100, 0, 100),
+      inBubbleOpacity: normalizeNumber(s.inBubbleOpacity, 100, 0, 100),
+      blurIntensity: normalizeNumber(s.blurIntensity, 8, 2, 30),
+      fontSize: s.fontSize == null || s.fontSize === '' ? null : normalizeNumber(s.fontSize, 14, 10, 22),
+      headerColor: normalizeColor(s.headerColor, '#202c33'),
+      convHeaderOpacity: normalizeNumber(s.convHeaderOpacity, 100, 0, 100),
+      convHeaderBlur: normalizeNumber(s.convHeaderBlur, 0, 0, 30),
+      chatlistHeaderColor: normalizeColor(s.chatlistHeaderColor, '#202c33'),
+      chatlistHeaderOpacity: normalizeNumber(s.chatlistHeaderOpacity, 100, 0, 100),
+      chatlistHeaderBlur: normalizeNumber(s.chatlistHeaderBlur, 0, 0, 30),
+      sidebarTintColor: normalizeColor(s.sidebarTintColor, '#111b21'),
+      sidebarTintOpacity: normalizeNumber(s.sidebarTintOpacity, 0, 0, 100),
+      sidebarBlurIntensity: normalizeNumber(s.sidebarBlurIntensity, 8, 2, 30),
+      sidebarColor: normalizeColor(s.sidebarColor, '#111b21'),
+      chatCardBgColor: normalizeColor(s.chatCardBgColor, '#1d1f1f'),
+      chatCardOpacity: normalizeNumber(s.chatCardOpacity, 100, 0, 100),
+      chatCardBlurIntensity: normalizeNumber(s.chatCardBlurIntensity, 4, 2, 20),
+      navStripColor: normalizeColor(s.navStripColor, '#202c33'),
+      navStripOpacity: normalizeNumber(s.navStripOpacity, 100, 0, 100),
+      navStripBlur: normalizeNumber(s.navStripBlur, 0, 0, 30)
+    };
+  }
+
   function ensureFallbackStyling(settings) {
     const existing = document.getElementById('wa-theme-selector-fallback-style');
     existing?.remove();
 
-    if (settings.enabled === false) return;
+    const s = normalizeGlobalSettings(settings);
+    if (s.enabled === false) return;
 
     const css = [];
     const header = firstMatch(fallbackSelectors.conversationHeader);
-    if (header && settings.headerColor) {
+    if (header && s.headerColor) {
       header.style.setProperty(
         'background-color',
-        toRgba(settings.headerColor, (settings.convHeaderOpacity ?? 100) / 100),
+        toRgba(s.headerColor, s.convHeaderOpacity / 100),
         'important'
       );
-      const blur = Number(settings.convHeaderBlur || 0);
+      const blur = Number(s.convHeaderBlur || 0);
       if (blur > 0) {
         header.style.setProperty('backdrop-filter', `blur(${blur}px) saturate(1.5)`, 'important');
         header.style.setProperty('-webkit-backdrop-filter', `blur(${blur}px) saturate(1.5)`, 'important');
@@ -85,11 +136,11 @@
     }
 
     const chatPanel = firstMatch(fallbackSelectors.chatPanel);
-    if (chatPanel && settings.fontFamily) {
-      css.push(`#main span[dir], #main .copyable-text { font-family: ${settings.fontFamily} !important; }`);
+    if (chatPanel && s.fontFamily) {
+      css.push(`#main span[dir], #main .copyable-text { font-family: ${s.fontFamily} !important; }`);
     }
-    if (chatPanel && settings.fontSize) {
-      css.push(`#main .copyable-text { font-size: ${Number(settings.fontSize)}px !important; line-height: 1.4 !important; }`);
+    if (chatPanel && s.fontSize) {
+      css.push(`#main .copyable-text { font-size: ${Number(s.fontSize)}px !important; line-height: 1.4 !important; }`);
     }
 
     if (css.length) {
@@ -97,6 +148,18 @@
       style.id = 'wa-theme-selector-fallback-style';
       style.textContent = css.join('\n');
       document.head.appendChild(style);
+    }
+  }
+
+  async function normalizeStoredGlobalSettings() {
+    try {
+      const { globalSettings = {} } = await chrome.storage.local.get('globalSettings');
+      const normalized = normalizeGlobalSettings(globalSettings);
+      const before = JSON.stringify(cleanInternalKeys(globalSettings));
+      const after = JSON.stringify(normalized);
+      if (before !== after) await chrome.storage.local.set({ globalSettings: normalized });
+    } catch (err) {
+      console.warn(LOG_PREFIX, 'storage normalization failed:', err);
     }
   }
 
@@ -109,15 +172,22 @@
     }
   }
 
-  // Popup compatibility: always answer GET_CURRENT_CHAT_SAFE, even if the original
-  // content listener failed to detect the title because WhatsApp changed attrs.
+  // Popup/content compatibility helpers.
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (!msg || msg.type !== 'GET_CURRENT_CHAT_SAFE') return false;
-    sendResponse({ chatName: getCurrentChatName() });
-    return true;
+    if (!msg) return false;
+    if (msg.type === 'GET_CURRENT_CHAT_SAFE') {
+      sendResponse({ chatName: getCurrentChatName() });
+      return true;
+    }
+    if (msg.type === 'NORMALIZE_WA_THEME_STORAGE') {
+      normalizeStoredGlobalSettings()
+        .then(() => sendResponse({ ok: true }))
+        .catch(error => sendResponse({ ok: false, error: String(error) }));
+      return true;
+    }
+    return false;
   });
 
-  // Re-run lightweight fallback styling when WhatsApp mutates the chat header.
   const debouncedReapply = (() => {
     let t = null;
     return () => {
@@ -136,6 +206,7 @@
     if (area === 'local' && changes.globalSettings) debouncedReapply();
   });
 
+  normalizeStoredGlobalSettings();
   reapplyFallbacks();
   console.log(LOG_PREFIX, 'loaded');
 })();
