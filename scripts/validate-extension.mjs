@@ -9,6 +9,7 @@ const requiredFiles = [
   'popup.html',
   'popup.css',
   'popup.js',
+  'popup-patch.js',
   'options.html',
   'options.js',
   'content.js',
@@ -17,6 +18,19 @@ const requiredFiles = [
   'background.js',
   'README.md',
   'PRIVACY.md',
+  'CHANGELOG.md',
+  'docs/ARCHITECTURE.md',
+  'docs/RELEASE_CHECKLIST.md',
+];
+
+const forbiddenRootFiles = [
+  '__dummy__.txt',
+  'branch-check-placeholder.txt',
+  'PLEASE_IGNORE_TEMP',
+  'not-branch-command.txt',
+  'create_branch',
+  'branch-probe.txt',
+  '.tmp',
 ];
 
 function fail(message) {
@@ -24,10 +38,13 @@ function fail(message) {
   process.exitCode = 1;
 }
 
+function read(file) {
+  return fs.readFileSync(path.join(root, file), 'utf8');
+}
+
 function readJson(file) {
-  const fullPath = path.join(root, file);
   try {
-    return JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+    return JSON.parse(read(file));
   } catch (error) {
     fail(`${file} is not valid JSON: ${error.message}`);
     return null;
@@ -35,9 +52,11 @@ function readJson(file) {
 }
 
 for (const file of requiredFiles) {
-  if (!fs.existsSync(path.join(root, file))) {
-    fail(`Missing required file: ${file}`);
-  }
+  if (!fs.existsSync(path.join(root, file))) fail(`Missing required file: ${file}`);
+}
+
+for (const file of forbiddenRootFiles) {
+  if (fs.existsSync(path.join(root, file))) fail(`Temporary/debug file must not be committed: ${file}`);
 }
 
 const manifest = readJson('manifest.json');
@@ -46,7 +65,7 @@ const packageJson = readJson('package.json');
 if (manifest) {
   if (manifest.manifest_version !== 3) fail('manifest_version must be 3');
   if (!manifest.name) fail('manifest.name is required');
-  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.3.0');
+  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.5.0');
 
   const scripts = manifest.content_scripts?.flatMap(entry => entry.js || []) || [];
   for (const script of scripts) {
@@ -60,9 +79,7 @@ if (manifest) {
   if (optionsPage && !fs.existsSync(path.join(root, optionsPage))) fail(`Manifest references missing options page: ${optionsPage}`);
 
   const serviceWorker = manifest.background?.service_worker;
-  if (serviceWorker && !fs.existsSync(path.join(root, serviceWorker))) {
-    fail(`Manifest references missing service worker: ${serviceWorker}`);
-  }
+  if (serviceWorker && !fs.existsSync(path.join(root, serviceWorker))) fail(`Manifest references missing service worker: ${serviceWorker}`);
 
   for (const [size, iconPath] of Object.entries(manifest.icons || {})) {
     if (!fs.existsSync(path.join(root, iconPath))) fail(`Manifest icon ${size} missing: ${iconPath}`);
@@ -78,23 +95,30 @@ if (manifest && packageJson && manifest.version !== packageJson.version) {
   fail(`manifest.json version (${manifest.version}) must match package.json version (${packageJson.version})`);
 }
 
-for (const file of ['popup.js', 'options.js', 'content.js', 'content-patch.js', 'content-repair-trigger.js', 'background.js']) {
-  const fullPath = path.join(root, file);
-  if (!fs.existsSync(fullPath)) continue;
+for (const file of ['popup.js', 'popup-patch.js', 'options.js', 'content.js', 'content-patch.js', 'content-repair-trigger.js', 'background.js']) {
+  if (!fs.existsSync(path.join(root, file))) continue;
   try {
-    new vm.Script(fs.readFileSync(fullPath, 'utf8'), { filename: file });
+    new vm.Script(read(file), { filename: file });
   } catch (error) {
     fail(`${file} has a JavaScript syntax error: ${error.message}`);
   }
 }
 
-const readme = fs.existsSync(path.join(root, 'README.md'))
-  ? fs.readFileSync(path.join(root, 'README.md'), 'utf8')
-  : '';
-if (readme.includes('ApexBlue11/Whatsapp-Custom-Wallpaper')) {
-  fail('README still points to the old ApexBlue11 clone URL');
+const popupHtml = fs.existsSync(path.join(root, 'popup.html')) ? read('popup.html') : '';
+for (const script of ['popup.js', 'popup-patch.js']) {
+  if (!popupHtml.includes(`src="${script}"`)) fail(`popup.html must load ${script}`);
 }
 
-if (!process.exitCode) {
-  console.log('✅ Extension validation passed');
+const optionsHtml = fs.existsSync(path.join(root, 'options.html')) ? read('options.html') : '';
+if (!optionsHtml.includes('src="options.js"')) fail('options.html must load options.js');
+
+const readme = fs.existsSync(path.join(root, 'README.md')) ? read('README.md') : '';
+if (readme.includes('ApexBlue11/Whatsapp-Custom-Wallpaper')) fail('README still points to the old ApexBlue11 clone URL');
+if (!readme.includes('Extension options')) fail('README should document the maintenance/options page');
+
+const changelog = fs.existsSync(path.join(root, 'CHANGELOG.md')) ? read('CHANGELOG.md') : '';
+if (manifest?.version && !changelog.includes(`## ${manifest.version}`)) {
+  fail(`CHANGELOG.md must include an entry for ${manifest.version}`);
 }
+
+if (!process.exitCode) console.log('✅ Extension validation passed');
