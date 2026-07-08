@@ -2,6 +2,22 @@
 
 All notable changes to this extension are tracked here.
 
+## 1.7.0
+
+### Added
+
+- `popup-layout.js` helper for popup usability.
+- Sticky bottom Apply / Reset action bar.
+- Floating Apply button for applying changes without scrolling.
+- Compact mode toggle for reducing popup height.
+- Section-level collapse buttons.
+- Layout toolbar with Jump to Apply, Top, Expand all, and Collapse advanced controls.
+
+### Changed
+
+- Popup now loads `popup-layout.js` after diagnostics.
+- Validator now checks popup layout wiring and key layout behavior markers.
+
 ## 1.6.2
 
 ### Added
