@@ -10,11 +10,13 @@ const requiredFiles = [
   'popup.css',
   'popup.js',
   'popup-patch.js',
+  'popup-diagnostics.js',
   'options.html',
   'options.js',
   'content.js',
   'content-patch.js',
   'content-repair-trigger.js',
+  'content-diagnostics.js',
   'background.js',
   'README.md',
   'PRIVACY.md',
@@ -67,12 +69,13 @@ const packageJson = readJson('package.json');
 if (manifest) {
   if (manifest.manifest_version !== 3) fail('manifest_version must be 3');
   if (!manifest.name) fail('manifest.name is required');
-  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.6.0');
+  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.6.2');
 
   const scripts = manifest.content_scripts?.flatMap(entry => entry.js || []) || [];
   for (const script of scripts) {
     if (!fs.existsSync(path.join(root, script))) fail(`Manifest references missing content script: ${script}`);
   }
+  if (!scripts.includes('content-diagnostics.js')) fail('manifest.json must load content-diagnostics.js');
 
   const popup = manifest.action?.default_popup;
   if (popup && !fs.existsSync(path.join(root, popup))) fail(`Manifest references missing popup: ${popup}`);
@@ -100,10 +103,12 @@ if (manifest && packageJson && manifest.version !== packageJson.version) {
 for (const file of [
   'popup.js',
   'popup-patch.js',
+  'popup-diagnostics.js',
   'options.js',
   'content.js',
   'content-patch.js',
   'content-repair-trigger.js',
+  'content-diagnostics.js',
   'background.js',
   'shared/theme-defaults.js',
   'shared/theme-presets.js',
@@ -117,7 +122,7 @@ for (const file of [
 }
 
 const popupHtml = fs.existsSync(path.join(root, 'popup.html')) ? read('popup.html') : '';
-for (const script of ['popup.js', 'popup-patch.js']) {
+for (const script of ['popup.js', 'popup-patch.js', 'popup-diagnostics.js']) {
   if (!popupHtml.includes(`src="${script}"`)) fail(`popup.html must load ${script}`);
 }
 
@@ -126,6 +131,14 @@ for (const sharedScript of ['shared/theme-defaults.js', 'shared/theme-presets.js
   if (!popupPatch.includes(sharedScript)) fail(`popup-patch.js must load ${sharedScript}`);
 }
 if (!popupPatch.includes('WAThemeShared')) fail('popup-patch.js must consume WAThemeShared shared constants');
+
+const popupDiagnostics = fs.existsSync(path.join(root, 'popup-diagnostics.js')) ? read('popup-diagnostics.js') : '';
+for (const hook of ['GET_WA_THEME_DIAGNOSTICS', 'FORCE_WA_THEME_WALLPAPER']) {
+  if (!popupDiagnostics.includes(hook)) fail(`popup-diagnostics.js must use ${hook}`);
+}
+
+const contentDiagnostics = fs.existsSync(path.join(root, 'content-diagnostics.js')) ? read('content-diagnostics.js') : '';
+if (!contentDiagnostics.includes('GET_WA_THEME_DIAGNOSTICS')) fail('content-diagnostics.js must handle GET_WA_THEME_DIAGNOSTICS');
 
 const optionsHtml = fs.existsSync(path.join(root, 'options.html')) ? read('options.html') : '';
 if (!optionsHtml.includes('src="options.js"')) fail('options.html must load options.js');
