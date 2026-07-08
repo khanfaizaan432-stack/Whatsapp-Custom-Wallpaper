@@ -1,6 +1,6 @@
 # Extension Architecture Notes
 
-This project is currently a Manifest V3 Chrome/Edge extension with a simple no-build setup.
+This project is a Manifest V3 Chrome/Edge extension with a simple no-build setup.
 
 ## Current runtime files
 
@@ -8,6 +8,8 @@ This project is currently a Manifest V3 Chrome/Edge extension with a simple no-b
 - `popup.css` — base popup styling.
 - `popup.js` — original popup state, upload, save, and tab-sync logic.
 - `popup-patch.js` — additive popup hardening and product-polish layer.
+- `shared/theme-defaults.js` — shared default values, range limits, and range-label mappings.
+- `shared/theme-presets.js` — shared one-click theme preset definitions.
 - `content.js` — original WhatsApp Web styling/content logic.
 - `content-patch.js` — runtime normalization and selector fallback layer.
 - `content-repair-trigger.js` — repair tick trigger when WhatsApp Web re-renders.
@@ -17,17 +19,24 @@ This project is currently a Manifest V3 Chrome/Edge extension with a simple no-b
 
 `popup.js` and `content.js` are large and high-risk to rewrite without browser-based regression testing. The patch files allow targeted upgrades while preserving the original working logic.
 
+## Current modularization status
+
+v1.6.0 begins the modular refactor without introducing a build step:
+
+- Shared constants now live under `shared/`.
+- `popup-patch.js` dynamically loads those shared scripts from extension-local URLs.
+- `popup-patch.js` still includes safe fallback constants so the popup does not fully break if shared loading fails.
+- The validator now checks that shared files exist, parse, and are referenced by `popup-patch.js`.
+
 ## Next refactor target
 
-When browser testing is available, split the code into smaller modules and load them explicitly from the manifest / popup page.
-
-Suggested structure:
+Keep splitting one low-risk slice at a time. Suggested target structure:
 
 ```text
 src/
   shared/
-    theme-defaults.js
-    theme-presets.js
+    theme-defaults.js       # started as shared/theme-defaults.js
+    theme-presets.js        # started as shared/theme-presets.js
     storage.js
     media-limits.js
   popup/
@@ -74,10 +83,13 @@ src/
 - save/unsaved feedback
 - debug summary copy
 - storage warning
+- changelog and release checklist
+- shared theme defaults/presets
 
 ## Known limitations
 
 - `popup.js` and `content.js` are still large.
+- `popup-patch.js` still owns behavior; only constants/presets have moved out so far.
 - The live preview is an approximate mock preview, not a full WhatsApp renderer.
 - JSON exports do not include IndexedDB video blobs.
 - WhatsApp DOM changes can still require selector updates.

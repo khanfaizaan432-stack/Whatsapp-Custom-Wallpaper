@@ -2,6 +2,22 @@
 
 All notable changes to this extension are tracked here.
 
+## 1.6.0
+
+### Added
+
+- Shared theme module files:
+  - `shared/theme-defaults.js`
+  - `shared/theme-presets.js`
+- Validator coverage for shared theme modules.
+- Validator checks that `popup-patch.js` loads and consumes `WAThemeShared`.
+
+### Changed
+
+- Refactored popup polish constants out of `popup-patch.js` into shared no-build classic scripts.
+- `popup-patch.js` now dynamically loads shared defaults/presets and falls back safely if shared loading fails.
+- Debug summary now reports whether shared modules loaded and how many presets are available.
+
 ## 1.5.0
 
 ### Added

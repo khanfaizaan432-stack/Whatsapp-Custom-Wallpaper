@@ -21,6 +21,8 @@ const requiredFiles = [
   'CHANGELOG.md',
   'docs/ARCHITECTURE.md',
   'docs/RELEASE_CHECKLIST.md',
+  'shared/theme-defaults.js',
+  'shared/theme-presets.js',
 ];
 
 const forbiddenRootFiles = [
@@ -65,7 +67,7 @@ const packageJson = readJson('package.json');
 if (manifest) {
   if (manifest.manifest_version !== 3) fail('manifest_version must be 3');
   if (!manifest.name) fail('manifest.name is required');
-  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.5.0');
+  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.6.0');
 
   const scripts = manifest.content_scripts?.flatMap(entry => entry.js || []) || [];
   for (const script of scripts) {
@@ -95,7 +97,17 @@ if (manifest && packageJson && manifest.version !== packageJson.version) {
   fail(`manifest.json version (${manifest.version}) must match package.json version (${packageJson.version})`);
 }
 
-for (const file of ['popup.js', 'popup-patch.js', 'options.js', 'content.js', 'content-patch.js', 'content-repair-trigger.js', 'background.js']) {
+for (const file of [
+  'popup.js',
+  'popup-patch.js',
+  'options.js',
+  'content.js',
+  'content-patch.js',
+  'content-repair-trigger.js',
+  'background.js',
+  'shared/theme-defaults.js',
+  'shared/theme-presets.js',
+]) {
   if (!fs.existsSync(path.join(root, file))) continue;
   try {
     new vm.Script(read(file), { filename: file });
@@ -108,6 +120,12 @@ const popupHtml = fs.existsSync(path.join(root, 'popup.html')) ? read('popup.htm
 for (const script of ['popup.js', 'popup-patch.js']) {
   if (!popupHtml.includes(`src="${script}"`)) fail(`popup.html must load ${script}`);
 }
+
+const popupPatch = fs.existsSync(path.join(root, 'popup-patch.js')) ? read('popup-patch.js') : '';
+for (const sharedScript of ['shared/theme-defaults.js', 'shared/theme-presets.js']) {
+  if (!popupPatch.includes(sharedScript)) fail(`popup-patch.js must load ${sharedScript}`);
+}
+if (!popupPatch.includes('WAThemeShared')) fail('popup-patch.js must consume WAThemeShared shared constants');
 
 const optionsHtml = fs.existsSync(path.join(root, 'options.html')) ? read('options.html') : '';
 if (!optionsHtml.includes('src="options.js"')) fail('options.html must load options.js');
