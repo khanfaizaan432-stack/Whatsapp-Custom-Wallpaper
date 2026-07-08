@@ -1,89 +1,80 @@
 // =============================================================================
-// WhatsApp Themes — popup-patch.js v1.4.0
+// WhatsApp Themes — popup-patch.js v1.6.0
 // Popup hardening + product polish loaded after popup.js.
+//
+// v1.6.0 is the first modular-refactor slice: defaults, limits, labels, and
+// presets now live in shared/*.js and are consumed here through WAThemeShared.
 // =============================================================================
 (() => {
   'use strict';
 
-  const MAX_IMAGE_MB = 8;
-  const MAX_VIDEO_MB = 200;
   const STATUS_ID = 'wa-popup-health-status';
   const POLISH_ID = 'wa-polish-panel';
+  const SHARED_SCRIPT_PATHS = ['shared/theme-defaults.js', 'shared/theme-presets.js'];
 
-  const PRESETS = [
-    {
-      name: 'AMOLED',
-      tag: 'Pure dark',
-      values: {
-        outBubbleColor: '#075e54', inBubbleColor: '#111111', headerColor: '#050505',
-        sidebarColor: '#050505', sidebarTintColor: '#000000', sidebarTintOpacity: 0,
-        navStripColor: '#050505', chatlistHeaderColor: '#050505', chatCardBgColor: '#101010',
-        outBubbleOpacity: 96, inBubbleOpacity: 92, convHeaderOpacity: 94, chatlistHeaderOpacity: 92,
-        navStripOpacity: 94, chatCardOpacity: 86, fontSize: 14
-      }
-    },
-    {
-      name: 'Glass Blur',
-      tag: 'Wallpaper first',
-      values: {
-        outBubbleColor: '#128c7e', inBubbleColor: '#1f2c33', headerColor: '#1f2c33',
-        sidebarTintColor: '#111b21', sidebarTintOpacity: 22, sidebarColor: '#111b21',
-        navStripColor: '#1f2c33', chatlistHeaderColor: '#1f2c33', chatCardBgColor: '#1f2c33',
-        outBubbleOpacity: 74, inBubbleOpacity: 70, convHeaderOpacity: 72, convHeaderBlur: 14,
-        chatlistHeaderOpacity: 68, chatlistHeaderBlur: 14, navStripOpacity: 64, navStripBlur: 12,
-        chatCardOpacity: 58, chatCardBlurIntensity: 10, blurIntensity: 12, sidebarBlurIntensity: 14
-      },
-      checks: { blurOutBubble: true, blurInBubble: true, blurSidebar: true, chatCardBlur: true }
-    },
-    {
-      name: 'Neon Green',
-      tag: 'Cyber WA',
-      values: {
-        outBubbleColor: '#00a884', inBubbleColor: '#172027', headerColor: '#06261f',
-        sidebarColor: '#061b18', sidebarTintColor: '#00a884', sidebarTintOpacity: 10,
-        navStripColor: '#061b18', chatlistHeaderColor: '#06261f', chatCardBgColor: '#09241f',
-        outBubbleOpacity: 100, inBubbleOpacity: 90, convHeaderOpacity: 96, chatlistHeaderOpacity: 96,
-        navStripOpacity: 100, chatCardOpacity: 88, fontSize: 14
-      }
-    },
-    {
-      name: 'Midnight Purple',
-      tag: 'Soft premium',
-      values: {
-        outBubbleColor: '#6d5dfc', inBubbleColor: '#29233a', headerColor: '#201a31',
-        sidebarColor: '#15111f', sidebarTintColor: '#6d5dfc', sidebarTintOpacity: 12,
-        navStripColor: '#181225', chatlistHeaderColor: '#201a31', chatCardBgColor: '#211b31',
-        outBubbleOpacity: 92, inBubbleOpacity: 86, convHeaderOpacity: 94, chatlistHeaderOpacity: 92,
-        navStripOpacity: 94, chatCardOpacity: 82, fontSize: 14
-      }
-    },
-    {
-      name: 'Sakura',
-      tag: 'Soft pink',
-      values: {
-        outBubbleColor: '#d95d8f', inBubbleColor: '#30242b', headerColor: '#33202a',
-        sidebarColor: '#1f171d', sidebarTintColor: '#d95d8f', sidebarTintOpacity: 10,
-        navStripColor: '#261922', chatlistHeaderColor: '#33202a', chatCardBgColor: '#2b2028',
-        outBubbleOpacity: 92, inBubbleOpacity: 86, convHeaderOpacity: 94, chatlistHeaderOpacity: 92,
-        navStripOpacity: 96, chatCardOpacity: 84, fontSize: 14
-      }
-    },
-    {
-      name: 'Minimal Grey',
-      tag: 'Clean',
-      values: {
-        outBubbleColor: '#3a4a54', inBubbleColor: '#242626', headerColor: '#202c33',
-        sidebarColor: '#111b21', sidebarTintColor: '#111b21', sidebarTintOpacity: 0,
-        navStripColor: '#202c33', chatlistHeaderColor: '#202c33', chatCardBgColor: '#1d1f1f',
-        outBubbleOpacity: 92, inBubbleOpacity: 92, convHeaderOpacity: 100, chatlistHeaderOpacity: 100,
-        navStripOpacity: 100, chatCardOpacity: 100, fontSize: 14
-      }
-    }
-  ];
+  const fallbackShared = Object.freeze({
+    limits: Object.freeze({
+      imageMaxMb: 8,
+      videoMaxMb: 200,
+      heavyStorageWarningMb: 300,
+      ranges: Object.freeze({
+        outBubbleOpacity: [0, 100, 100], inBubbleOpacity: [0, 100, 100], blurIntensity: [2, 30, 8],
+        fontSize: [10, 22, 14], convHeaderOpacity: [0, 100, 100], convHeaderBlur: [0, 30, 0],
+        chatlistHeaderOpacity: [0, 100, 100], chatlistHeaderBlur: [0, 30, 0],
+        sidebarTintOpacity: [0, 100, 0], sidebarBlurIntensity: [2, 30, 8],
+        chatCardOpacity: [0, 100, 100], chatCardBlurIntensity: [2, 20, 4],
+        navStripOpacity: [0, 100, 100], navStripBlur: [0, 30, 0],
+      }),
+    }),
+    rangeLabels: Object.freeze([
+      ['outBubbleOpacity', 'outOpacityVal'], ['inBubbleOpacity', 'inOpacityVal'], ['blurIntensity', 'blurVal'],
+      ['sidebarTintOpacity', 'sidebarTintVal'], ['sidebarBlurIntensity', 'sidebarBlurVal'],
+      ['chatCardOpacity', 'chatCardOpacityVal'], ['chatCardBlurIntensity', 'chatCardBlurIntensityVal'],
+      ['navStripOpacity', 'navStripOpacityVal'], ['navStripBlur', 'navStripBlurVal'], ['fontSize', 'fontSizeVal'],
+      ['convHeaderOpacity', 'convHeaderOpacityVal'], ['convHeaderBlur', 'convHeaderBlurVal'],
+      ['chatlistHeaderOpacity', 'chatlistHeaderOpacityVal'], ['chatlistHeaderBlur', 'chatlistHeaderBlurVal'],
+    ]),
+    presets: Object.freeze([
+      Object.freeze({ name: 'AMOLED', tag: 'Pure dark', values: Object.freeze({ outBubbleColor: '#075e54', inBubbleColor: '#111111', headerColor: '#050505', sidebarColor: '#050505', sidebarTintColor: '#000000', sidebarTintOpacity: 0, navStripColor: '#050505', chatlistHeaderColor: '#050505', chatCardBgColor: '#101010', outBubbleOpacity: 96, inBubbleOpacity: 92, convHeaderOpacity: 94, chatlistHeaderOpacity: 92, navStripOpacity: 94, chatCardOpacity: 86, fontSize: 14 }) }),
+      Object.freeze({ name: 'Glass Blur', tag: 'Wallpaper first', values: Object.freeze({ outBubbleColor: '#128c7e', inBubbleColor: '#1f2c33', headerColor: '#1f2c33', sidebarTintColor: '#111b21', sidebarTintOpacity: 22, sidebarColor: '#111b21', navStripColor: '#1f2c33', chatlistHeaderColor: '#1f2c33', chatCardBgColor: '#1f2c33', outBubbleOpacity: 74, inBubbleOpacity: 70, convHeaderOpacity: 72, convHeaderBlur: 14, chatlistHeaderOpacity: 68, chatlistHeaderBlur: 14, navStripOpacity: 64, navStripBlur: 12, chatCardOpacity: 58, chatCardBlurIntensity: 10, blurIntensity: 12, sidebarBlurIntensity: 14 }), checks: Object.freeze({ blurOutBubble: true, blurInBubble: true, blurSidebar: true, chatCardBlur: true }) }),
+      Object.freeze({ name: 'Neon Green', tag: 'Cyber WA', values: Object.freeze({ outBubbleColor: '#00a884', inBubbleColor: '#172027', headerColor: '#06261f', sidebarColor: '#061b18', sidebarTintColor: '#00a884', sidebarTintOpacity: 10, navStripColor: '#061b18', chatlistHeaderColor: '#06261f', chatCardBgColor: '#09241f', outBubbleOpacity: 100, inBubbleOpacity: 90, convHeaderOpacity: 96, chatlistHeaderOpacity: 96, navStripOpacity: 100, chatCardOpacity: 88, fontSize: 14 }) }),
+    ]),
+  });
+
+  let shared = fallbackShared;
 
   function byId(id) { return document.getElementById(id); }
   function qs(selector, root = document) { return root.querySelector(selector); }
   function qsa(selector, root = document) { return Array.from(root.querySelectorAll(selector)); }
+
+  function scriptUrl(path) {
+    return chrome?.runtime?.getURL ? chrome.runtime.getURL(path) : path;
+  }
+
+  function loadScript(path) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector(`script[data-wa-shared-script="${path}"]`)) {
+        resolve();
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = scriptUrl(path);
+      script.dataset.waSharedScript = path;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error(`Failed to load ${path}`));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function loadSharedModules() {
+    try {
+      for (const path of SHARED_SCRIPT_PATHS) await loadScript(path);
+      shared = { ...fallbackShared, ...(window.WAThemeShared || {}) };
+    } catch (err) {
+      console.warn('[WA Themes popup-patch] Using fallback shared constants:', err);
+      shared = fallbackShared;
+    }
+  }
 
   function setText(id, text) {
     const el = byId(id);
@@ -122,7 +113,6 @@
       body { background: radial-gradient(circle at top left, #20343d 0, #111b21 42%, #081116 100%) !important; }
       .wa-header { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); box-shadow: 0 8px 28px rgba(0,0,0,.24); }
       section { border: 1px solid rgba(134,150,160,.14); border-radius: 14px; margin: 10px 10px 12px; background: rgba(31,44,51,.72); box-shadow: 0 12px 30px rgba(0,0,0,.18); overflow: hidden; }
-      .section-title { padding-top: 2px; }
       .row { transition: background .18s ease, transform .18s ease; }
       .row:hover { background: rgba(255,255,255,.025); }
       .upload-btn, .apply-btn, .reset-all-btn, .tab { transition: transform .16s ease, box-shadow .16s ease, filter .16s ease; }
@@ -163,15 +153,7 @@
   }
 
   function wireRangeLabels() {
-    const controls = [
-      ['outBubbleOpacity', 'outOpacityVal'], ['inBubbleOpacity', 'inOpacityVal'], ['blurIntensity', 'blurVal'],
-      ['sidebarTintOpacity', 'sidebarTintVal'], ['sidebarBlurIntensity', 'sidebarBlurVal'],
-      ['chatCardOpacity', 'chatCardOpacityVal'], ['chatCardBlurIntensity', 'chatCardBlurIntensityVal'],
-      ['navStripOpacity', 'navStripOpacityVal'], ['navStripBlur', 'navStripBlurVal'], ['fontSize', 'fontSizeVal'],
-      ['convHeaderOpacity', 'convHeaderOpacityVal'], ['convHeaderBlur', 'convHeaderBlurVal'],
-      ['chatlistHeaderOpacity', 'chatlistHeaderOpacityVal'], ['chatlistHeaderBlur', 'chatlistHeaderBlurVal']
-    ];
-    for (const [inputId, labelId] of controls) {
+    for (const [inputId, labelId] of shared.rangeLabels || fallbackShared.rangeLabels) {
       const input = byId(inputId);
       if (!input) continue;
       const update = () => setText(labelId, input.value);
@@ -188,7 +170,7 @@
       const file = input.files?.[0];
       if (!file) return;
       const isImage = type === 'image';
-      const maxMb = isImage ? MAX_IMAGE_MB : MAX_VIDEO_MB;
+      const maxMb = isImage ? shared.limits.imageMaxMb : shared.limits.videoMaxMb;
       const okMime = isImage ? file.type.startsWith('image/') : file.type.startsWith('video/');
       if (!okMime) {
         input.value = '';
@@ -234,7 +216,7 @@
     tab.insertAdjacentElement('afterbegin', panel);
 
     const grid = byId('waPresetGrid');
-    for (const preset of PRESETS) {
+    for (const preset of shared.presets || fallbackShared.presets) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'wa-preset';
@@ -312,8 +294,7 @@
   }
 
   function wireDirtyTracking() {
-    const controls = qsa('input, select');
-    for (const control of controls) {
+    for (const control of qsa('input, select')) {
       control.addEventListener('input', () => { markDirty('Unsaved changes', true); updatePreview(); });
       control.addEventListener('change', () => { markDirty('Unsaved changes', true); updatePreview(); });
     }
@@ -339,7 +320,9 @@
     try {
       const bytes = await chrome.storage.local.getBytesInUse(null);
       const mb = bytes / (1024 * 1024);
-      if (mb > 300) showStatus(`Extension storage is using about ${mb.toFixed(0)} MB. Open Maintenance to clean video wallpapers.`, 'error');
+      if (mb > shared.limits.heavyStorageWarningMb) {
+        showStatus(`Extension storage is using about ${mb.toFixed(0)} MB. Open Maintenance to clean video wallpapers.`, 'error');
+      }
     } catch (_) {}
   }
 
@@ -349,11 +332,13 @@
       const data = await chrome.storage.local.get(['globalSettings', 'chatWallpapers']);
       const summary = {
         version: chrome.runtime.getManifest().version,
+        sharedModulesLoaded: Boolean(window.WAThemeShared?.presets),
+        presetCount: (shared.presets || []).length,
         storageMB: Number((bytes / (1024 * 1024)).toFixed(2)),
         chats: Object.keys(data.chatWallpapers || {}).length,
         enabled: data.globalSettings?.enabled !== false,
         globalWallpaper: data.globalSettings?.globalWallpaper?.type || null,
-        sidebarWallpaper: data.globalSettings?.sidebarWallpaper?.type || null
+        sidebarWallpaper: data.globalSettings?.sidebarWallpaper?.type || null,
       };
       await navigator.clipboard.writeText(JSON.stringify(summary, null, 2));
       showStatus('Debug summary copied.', 'ok');
@@ -362,24 +347,17 @@
     }
   }
 
-  function init() {
+  function wireRangeClamping() {
+    const ranges = shared.limits?.ranges || fallbackShared.limits.ranges;
+    for (const [id, [min, max, fallback]] of Object.entries(ranges)) clampRangeControl(id, min, max, fallback);
+  }
+
+  async function init() {
+    await loadSharedModules();
     injectPolishStyles();
     buildPolishPanel();
     wireRangeLabels();
-    clampRangeControl('outBubbleOpacity', 0, 100, 100);
-    clampRangeControl('inBubbleOpacity', 0, 100, 100);
-    clampRangeControl('blurIntensity', 2, 30, 8);
-    clampRangeControl('fontSize', 10, 22, 14);
-    clampRangeControl('convHeaderOpacity', 0, 100, 100);
-    clampRangeControl('convHeaderBlur', 0, 30, 0);
-    clampRangeControl('chatlistHeaderOpacity', 0, 100, 100);
-    clampRangeControl('chatlistHeaderBlur', 0, 30, 0);
-    clampRangeControl('sidebarTintOpacity', 0, 100, 0);
-    clampRangeControl('sidebarBlurIntensity', 2, 30, 8);
-    clampRangeControl('chatCardOpacity', 0, 100, 100);
-    clampRangeControl('chatCardBlurIntensity', 2, 20, 4);
-    clampRangeControl('navStripOpacity', 0, 100, 100);
-    clampRangeControl('navStripBlur', 0, 30, 0);
+    wireRangeClamping();
     validateFileInput('wa-global-file-img', 'image');
     validateFileInput('wa-sidebar-file-img', 'image');
     validateFileInput('wa-global-file-vid', 'video');
