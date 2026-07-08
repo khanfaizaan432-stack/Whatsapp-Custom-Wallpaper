@@ -1,117 +1,318 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>WA Themes</title>
-  <link rel="stylesheet" href="popup.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Themes</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="wrap">
-    <header class="wa-header">
-      <div class="brand"><span class="logo">🎨</span><strong>WA Themes</strong></div>
-      <label class="switch">
-        <input id="enabled" type="checkbox" checked>
-        <span class="slider"></span>
+
+  <div class="wa-header">
+    <div class="wa-header-left">
+      <span class="wa-logo">🎨</span>
+      <span class="wa-title">WA Themes</span>
+    </div>
+    <label class="toggle" title="Enable / disable all overrides">
+      <input type="checkbox" id="enabled" checked>
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="theme">Global Theme</button>
+    <button class="tab"        data-tab="chats">Per-Chat</button>
+  </div>
+
+  <!-- ================================================================
+       GLOBAL THEME TAB
+  ================================================================= -->
+  <div id="tab-theme" class="tab-content active">
+
+    <!-- BUBBLES -->
+    <section>
+      <div class="section-title">💬 Bubbles</div>
+
+      <div class="bubble-group">
+        <div class="bubble-group-label">↑ Your messages</div>
+        <div class="row">
+          <label>Colour</label>
+          <div class="color-row">
+            <input type="color" id="outBubbleColor" value="#144d37">
+            <button class="reset-btn" data-target="outBubbleColor" data-default="#144d37">↺</button>
+          </div>
+        </div>
+        <div class="row">
+          <label>Opacity</label>
+          <input type="range" id="outBubbleOpacity" min="0" max="100" value="100" step="1">
+          <span class="range-label"><span id="outOpacityVal">100</span>%</span>
+        </div>
+        <div class="row">
+          <label>Blur / glass</label>
+          <label class="toggle small">
+            <input type="checkbox" id="blurOutBubble">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="bubble-group">
+        <div class="bubble-group-label">↓ Their messages</div>
+        <div class="row">
+          <label>Colour</label>
+          <div class="color-row">
+            <input type="color" id="inBubbleColor" value="#242626">
+            <button class="reset-btn" data-target="inBubbleColor" data-default="#242626">↺</button>
+          </div>
+        </div>
+        <div class="row">
+          <label>Opacity</label>
+          <input type="range" id="inBubbleOpacity" min="0" max="100" value="100" step="1">
+          <span class="range-label"><span id="inOpacityVal">100</span>%</span>
+        </div>
+        <div class="row">
+          <label>Blur / glass</label>
+          <label class="toggle small">
+            <input type="checkbox" id="blurInBubble">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="row section-divider-row">
+        <label>Blur intensity <span class="sub-hint">(both bubbles)</span></label>
+        <input type="range" id="blurIntensity" min="2" max="30" value="8" step="1">
+        <span class="range-label"><span id="blurVal">8</span>px</span>
+      </div>
+    </section>
+
+    <!-- FONT -->
+    <section>
+      <div class="section-title">🔤 Font</div>
+      <div class="row">
+        <label>Family</label>
+        <select id="fontFamily">
+          <option value="">WA Default</option>
+          <option value="'Segoe UI', sans-serif">Segoe UI</option>
+          <option value="'Inter', 'Helvetica Neue', sans-serif">Inter</option>
+          <option value="'Arial', sans-serif">Arial</option>
+          <option value="'Georgia', serif">Georgia</option>
+          <option value="'Courier New', monospace">Courier New</option>
+          <option value="'Comic Sans MS', cursive">Comic Sans 😔</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Size</label>
+        <input type="range" id="fontSize" min="10" max="22" value="14" step="1">
+        <span class="range-label"><span id="fontSizeVal">14</span>px</span>
+      </div>
+    </section>
+
+    <!-- HEADER BAR — conversation header only (top bar when a chat is open) -->
+    <section>
+      <div class="section-title">🎨 Conversation Header</div>
+      <div class="hint-text">Top bar shown when a chat is open. Set opacity &lt; 100% to let a chat wallpaper show through.</div>
+      <div class="row">
+        <label>Colour</label>
+        <div class="color-row">
+          <input type="color" id="headerColor" value="#202c33">
+          <button class="reset-btn" data-target="headerColor" data-default="#202c33">↺</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Opacity</label>
+        <input type="range" id="convHeaderOpacity" min="0" max="100" value="100" step="1">
+        <span class="range-label"><span id="convHeaderOpacityVal">100</span>%</span>
+      </div>
+      <div class="row">
+        <label>Blur <span class="sub-hint">(backdrop)</span></label>
+        <input type="range" id="convHeaderBlur" min="0" max="30" value="0" step="1">
+        <span class="range-label"><span id="convHeaderBlurVal">0</span>px</span>
+      </div>
+    </section>
+
+    <!-- CHAT WALLPAPER GLOBAL -->
+    <section>
+      <div class="section-title">🖼️ Chat Wallpaper</div>
+      <div class="hint-text">Default for all chats. Per-chat settings override this.</div>
+      <div id="global-wp-preview" class="media-preview">
+        <span id="global-wp-placeholder">No wallpaper set</span>
+      </div>
+      <div class="upload-row">
+        <button id="wa-global-btn-img"    class="upload-btn">📷 Image</button>
+        <button id="wa-global-btn-vid"    class="upload-btn">🎬 Video</button>
+        <button id="wa-global-btn-remove" class="upload-btn remove-btn">✕</button>
+      </div>
+      <input type="file" id="wa-global-file-img" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+      <input type="file" id="wa-global-file-vid" accept="video/mp4,video/webm" style="display:none">
+      <label class="check-label">
+        <input type="checkbox" id="globalWpBlur">
+        Blur this wallpaper
       </label>
-    </header>
+    </section>
 
-    <div class="tabs">
-      <button class="tab active" data-tab="theme">Theme</button>
-      <button class="tab" data-tab="chats">Chats</button>
-    </div>
-
-    <div id="tab-theme" class="tab-content active">
-      <section>
-        <div class="section-title">🖼️ Chat Wallpaper</div>
-        <p class="hint-text">Default for all chats. Per-chat settings override this.</p>
-        <div id="globalWallpaperPreview" class="wallpaper-preview empty">No wallpaper selected</div>
-        <div class="upload-row">
-          <label class="upload-btn">📷 Image<input id="wa-global-file-img" type="file" accept="image/*" hidden></label>
-          <label class="upload-btn">🎬 Video<input id="wa-global-file-vid" type="file" accept="video/*" hidden></label>
-          <button id="clearGlobalWallpaper" class="icon-btn">×</button>
-        </div>
-        <label class="check-row"><input id="globalWallpaperBlur" type="checkbox"> Blur this wallpaper</label>
-      </section>
-
-      <section>
-        <div class="section-title">▣ Side Panel</div>
-        <p class="hint-text">Wallpaper applies to the entire left panel — the nav strip, chatlist header, and chat list all sit on top of it. Reduce header opacity below to let the wallpaper show through.</p>
-        <div id="sidebarWallpaperPreview" class="wallpaper-preview empty">No sidebar wallpaper selected</div>
-        <div class="upload-row">
-          <label class="upload-btn">📷 Image<input id="wa-sidebar-file-img" type="file" accept="image/*" hidden></label>
-          <label class="upload-btn">🎬 Video<input id="wa-sidebar-file-vid" type="file" accept="video/*" hidden></label>
-          <button id="clearSidebarWallpaper" class="icon-btn">×</button>
-        </div>
-        <div class="row"><label>Fog / tint colour</label><input id="sidebarTintColor" type="color" value="#111b21"></div>
-        <div class="row"><label>Tint opacity</label><input id="sidebarTintOpacity" type="range" min="0" max="100" value="0"><span id="sidebarTintVal">0</span>%</div>
-        <label class="check-row"><input id="blurSidebar" type="checkbox"> Blur sidebar wallpaper</label>
-        <div class="row"><label>Sidebar blur</label><input id="sidebarBlurIntensity" type="range" min="2" max="30" value="8"><span id="sidebarBlurVal">8</span>px</div>
-      </section>
-
-      <section>
-        <div class="section-title">💬 Bubbles</div>
-        <div class="bubble-card">
-          <div class="subhead">↑ Your Messages</div>
-          <div class="row"><label>Colour</label><input id="outBubbleColor" type="color" value="#144d37"><button id="resetOut" class="small-btn">↻</button></div>
-          <div class="row"><label>Opacity</label><input id="outBubbleOpacity" type="range" min="0" max="100" value="100"><span id="outOpacityVal">100</span>%</div>
-          <label class="check-row"><input id="blurOutBubble" type="checkbox"> Blur / glass</label>
-        </div>
-        <div class="bubble-card">
-          <div class="subhead">↓ Their Messages</div>
-          <div class="row"><label>Colour</label><input id="inBubbleColor" type="color" value="#242626"><button id="resetIn" class="small-btn">↻</button></div>
-          <div class="row"><label>Opacity</label><input id="inBubbleOpacity" type="range" min="0" max="100" value="100"><span id="inOpacityVal">100</span>%</div>
-          <label class="check-row"><input id="blurInBubble" type="checkbox"> Blur / glass</label>
-        </div>
-        <div class="row"><label>Blur intensity <small>(both bubbles)</small></label><input id="blurIntensity" type="range" min="2" max="30" value="8"><span id="blurVal">8</span>px</div>
-      </section>
-
-      <section>
-        <div class="section-title">🔤 Font</div>
-        <div class="row"><label>Font family</label><input id="fontFamily" type="text" placeholder="Segoe UI, Arial, sans-serif"></div>
-        <div class="row"><label>Font size</label><input id="fontSize" type="range" min="10" max="22" value="14"><span id="fontSizeVal">14</span>px</div>
-      </section>
-
-      <section>
-        <div class="section-title">📌 Headers</div>
-        <div class="row"><label>Conversation header colour</label><input id="headerColor" type="color" value="#202c33"></div>
-        <div class="row"><label>Conversation header opacity</label><input id="convHeaderOpacity" type="range" min="0" max="100" value="100"><span id="convHeaderOpacityVal">100</span>%</div>
-        <div class="row"><label>Conversation header blur</label><input id="convHeaderBlur" type="range" min="0" max="30" value="0"><span id="convHeaderBlurVal">0</span>px</div>
-        <hr>
-        <div class="row"><label>Chatlist header colour</label><input id="chatlistHeaderColor" type="color" value="#202c33"></div>
-        <div class="row"><label>Chatlist header opacity</label><input id="chatlistHeaderOpacity" type="range" min="0" max="100" value="100"><span id="chatlistHeaderOpacityVal">100</span>%</div>
-        <div class="row"><label>Chatlist header blur</label><input id="chatlistHeaderBlur" type="range" min="0" max="30" value="0"><span id="chatlistHeaderBlurVal">0</span>px</div>
-      </section>
-
-      <section>
-        <div class="section-title">🧩 Chat List Cards</div>
-        <div class="row"><label>Card background</label><input id="chatCardBgColor" type="color" value="#1d1f1f"></div>
-        <div class="row"><label>Card opacity</label><input id="chatCardOpacity" type="range" min="0" max="100" value="100"><span id="chatCardOpacityVal">100</span>%</div>
-        <label class="check-row"><input id="chatCardBlur" type="checkbox"> Blur chat cards</label>
-        <div class="row"><label>Card blur</label><input id="chatCardBlurIntensity" type="range" min="2" max="20" value="4"><span id="chatCardBlurIntensityVal">4</span>px</div>
-      </section>
-
-      <section>
-        <div class="section-title">☰ Nav Strip</div>
-        <div class="row"><label>Nav strip colour</label><input id="navStripColor" type="color" value="#202c33"></div>
-        <div class="row"><label>Nav strip opacity</label><input id="navStripOpacity" type="range" min="0" max="100" value="100"><span id="navStripOpacityVal">100</span>%</div>
-        <div class="row"><label>Nav strip blur</label><input id="navStripBlur" type="range" min="0" max="30" value="0"><span id="navStripBlurVal">0</span>px</div>
-      </section>
-
-      <div class="sticky-actions">
-        <button id="applyBtn" class="apply-btn">Apply Changes</button>
-        <button id="resetAllBtn" class="reset-all-btn">↺ Reset All to Defaults</button>
+    <!-- SIDE PANEL -->
+    <section>
+      <div class="section-title">📱 Side Panel</div>
+      <div class="hint-text">
+        Wallpaper applies to the <strong>entire left panel</strong> — the nav strip, chatlist header, and chat list all sit on top of it.
+        Reduce header opacity below to let the wallpaper show through.
       </div>
-    </div>
 
-    <div id="tab-chats" class="tab-content">
-      <div class="current-chat-banner">
-        Active: <strong id="currentChatLabel">—</strong>
+      <!-- Sidebar wallpaper upload -->
+      <div id="sidebar-wp-preview" class="media-preview">
+        <span id="sidebar-wp-placeholder">No wallpaper set</span>
       </div>
-      <div class="hint-text" style="padding:8px 16px 0;font-size:11px;">
-        Open a chat → click ⋮ → "Chat Wallpaper" to set per-chat wallpaper and bubble overrides.
+      <div class="upload-row">
+        <button id="wa-sidebar-btn-img"    class="upload-btn">📷 Image</button>
+        <button id="wa-sidebar-btn-vid"    class="upload-btn">🎬 Video</button>
+        <button id="wa-sidebar-btn-remove" class="upload-btn remove-btn">✕</button>
       </div>
-      <div id="chat-list-container"></div>
+      <input type="file" id="wa-sidebar-file-img" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none">
+      <input type="file" id="wa-sidebar-file-vid" accept="video/mp4,video/webm" style="display:none">
+
+      <div class="sub-divider"></div>
+
+      <!-- Fog / tint -->
+      <div class="row">
+        <label>Fog / tint colour</label>
+        <input type="color" id="sidebarTintColor" value="#111b21">
+      </div>
+      <div class="row">
+        <label>Fog opacity <span class="sub-hint">(0 = off)</span></label>
+        <input type="range" id="sidebarTintOpacity" min="0" max="100" value="0" step="1">
+        <span class="range-label"><span id="sidebarTintVal">0</span>%</span>
+      </div>
+      <div class="row">
+        <label>Blur sidebar</label>
+        <label class="toggle small">
+          <input type="checkbox" id="blurSidebar">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="row">
+        <label>Blur intensity</label>
+        <input type="range" id="sidebarBlurIntensity" min="2" max="30" value="8" step="1">
+        <span class="range-label"><span id="sidebarBlurVal">8</span>px</span>
+      </div>
+
+      <div class="sub-divider"></div>
+
+      <!-- Solid colour fallback (no wallpaper) -->
+      <div class="row">
+        <label>Solid colour <span class="sub-hint">(no wallpaper)</span></label>
+        <div class="color-row">
+          <input type="color" id="sidebarColor" value="#111b21">
+          <button class="reset-btn" data-target="sidebarColor" data-default="#111b21">↺</button>
+        </div>
+      </div>
+
+      <div class="sub-divider"></div>
+
+      <!-- ── NAV STRIP ─────────────────────────────────────────────────────── -->
+      <div style="font-size:11px;color:#00a884;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.5px;margin-bottom:8px;">🗂️ Nav Strip</div>
+      <div class="hint-text" style="margin-bottom:8px;">
+        The leftmost icon panel (Chats / Status / Channels). Set opacity to 0 for full transparency.
+      </div>
+      <div class="row">
+        <label>Colour</label>
+        <div class="color-row">
+          <input type="color" id="navStripColor" value="#202c33">
+          <button class="reset-btn" data-target="navStripColor" data-default="#202c33">↺</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Opacity</label>
+        <input type="range" id="navStripOpacity" min="0" max="100" value="100" step="1">
+        <span class="range-label"><span id="navStripOpacityVal">100</span>%</span>
+      </div>
+      <div class="row">
+        <label>Blur <span class="sub-hint">(backdrop)</span></label>
+        <input type="range" id="navStripBlur" min="0" max="30" value="0" step="1">
+        <span class="range-label"><span id="navStripBlurVal">0</span>px</span>
+      </div>
+
+      <div class="sub-divider"></div>
+
+      <!-- ── CHATLIST HEADER TRANSPARENCY ────────────────────────────────── -->
+      <div style="font-size:11px;color:#00a884;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.5px;margin-bottom:8px;">🔝 Chatlist Header</div>
+      <div class="hint-text" style="margin-bottom:8px;">
+        The bar at the top of the sidebar (green by default). Reduce opacity to let the sidebar wallpaper show through.
+      </div>
+      <div class="row">
+        <label>Colour</label>
+        <div class="color-row">
+          <input type="color" id="chatlistHeaderColor" value="#202c33">
+          <button class="reset-btn" data-target="chatlistHeaderColor" data-default="#202c33">↺</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Opacity</label>
+        <input type="range" id="chatlistHeaderOpacity" min="0" max="100" value="100" step="1">
+        <span class="range-label"><span id="chatlistHeaderOpacityVal">100</span>%</span>
+      </div>
+      <div class="row">
+        <label>Blur <span class="sub-hint">(backdrop)</span></label>
+        <input type="range" id="chatlistHeaderBlur" min="0" max="30" value="0" step="1">
+        <span class="range-label"><span id="chatlistHeaderBlurVal">0</span>px</span>
+      </div>
+
+      <div class="sub-divider"></div>
+
+      <!-- ── CHAT CARD STYLE ───────────────────────────────────────────── -->
+      <div style="font-size:11px;color:#00a884;font-weight:600;text-transform:uppercase;
+                  letter-spacing:.5px;margin-bottom:8px;">💬 Chat Cards</div>
+      <div class="hint-text" style="margin-bottom:8px;">
+        Background of each conversation row. Reduce opacity to let the sidebar wallpaper show through.
+      </div>
+      <div class="row">
+        <label>Card colour</label>
+        <div class="color-row">
+          <input type="color" id="chatCardBgColor" value="#1d1f1f">
+          <button class="reset-btn" data-target="chatCardBgColor" data-default="#1d1f1f">↺</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Opacity</label>
+        <input type="range" id="chatCardOpacity" min="0" max="100" value="100" step="1">
+        <span class="range-label"><span id="chatCardOpacityVal">100</span>%</span>
+      </div>
+      <div class="row">
+        <label>Blur card <span class="sub-hint">(glass)</span></label>
+        <label class="toggle small">
+          <input type="checkbox" id="chatCardBlur">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="row">
+        <label>Blur intensity</label>
+        <input type="range" id="chatCardBlurIntensity" min="2" max="20" value="4" step="1">
+        <span class="range-label"><span id="chatCardBlurIntensityVal">4</span>px</span>
+      </div>
+
+      <div class="sub-divider"></div>
+
+    </section>
+
+    <div class="action-area">
+      <button id="applyBtn"    class="apply-btn">Apply Changes</button>
+      <button id="resetAllBtn" class="reset-all-btn">↺ Reset All to Defaults</button>
     </div>
+  </div>
+
+  <!-- ================================================================
+       PER-CHAT TAB
+  ================================================================= -->
+  <div id="tab-chats" class="tab-content">
+    <div class="current-chat-banner">
+      Active: <strong id="currentChatLabel">—</strong>
+    </div>
+    <div class="hint-text" style="padding:8px 16px 0;font-size:11px;">
+      Open a chat → click ⋮ → "Chat Wallpaper" to set per-chat wallpaper and bubble overrides.
+    </div>
+    <div id="chat-list-container"></div>
   </div>
 
   <script src="popup.js"></script>
