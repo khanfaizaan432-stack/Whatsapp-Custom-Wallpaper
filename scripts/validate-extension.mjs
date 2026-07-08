@@ -11,6 +11,7 @@ const requiredFiles = [
   'popup.js',
   'popup-patch.js',
   'popup-diagnostics.js',
+  'popup-layout.js',
   'options.html',
   'options.js',
   'content.js',
@@ -69,7 +70,7 @@ const packageJson = readJson('package.json');
 if (manifest) {
   if (manifest.manifest_version !== 3) fail('manifest_version must be 3');
   if (!manifest.name) fail('manifest.name is required');
-  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.6.2');
+  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.7.0');
 
   const scripts = manifest.content_scripts?.flatMap(entry => entry.js || []) || [];
   for (const script of scripts) {
@@ -104,6 +105,7 @@ for (const file of [
   'popup.js',
   'popup-patch.js',
   'popup-diagnostics.js',
+  'popup-layout.js',
   'options.js',
   'content.js',
   'content-patch.js',
@@ -122,7 +124,7 @@ for (const file of [
 }
 
 const popupHtml = fs.existsSync(path.join(root, 'popup.html')) ? read('popup.html') : '';
-for (const script of ['popup.js', 'popup-patch.js', 'popup-diagnostics.js']) {
+for (const script of ['popup.js', 'popup-patch.js', 'popup-diagnostics.js', 'popup-layout.js']) {
   if (!popupHtml.includes(`src="${script}"`)) fail(`popup.html must load ${script}`);
 }
 
@@ -135,6 +137,11 @@ if (!popupPatch.includes('WAThemeShared')) fail('popup-patch.js must consume WAT
 const popupDiagnostics = fs.existsSync(path.join(root, 'popup-diagnostics.js')) ? read('popup-diagnostics.js') : '';
 for (const hook of ['GET_WA_THEME_DIAGNOSTICS', 'FORCE_WA_THEME_WALLPAPER']) {
   if (!popupDiagnostics.includes(hook)) fail(`popup-diagnostics.js must use ${hook}`);
+}
+
+const popupLayout = fs.existsSync(path.join(root, 'popup-layout.js')) ? read('popup-layout.js') : '';
+for (const expected of ['wa-compact-mode', 'waFloatingApply', 'wa-section-collapse-btn', 'action-area']) {
+  if (!popupLayout.includes(expected)) fail(`popup-layout.js must implement ${expected}`);
 }
 
 const contentDiagnostics = fs.existsSync(path.join(root, 'content-diagnostics.js')) ? read('content-diagnostics.js') : '';
