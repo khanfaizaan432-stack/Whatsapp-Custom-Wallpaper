@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "WhatsApp Themes",
   "description": "Per-chat wallpapers (image/video), bubble colours, fonts, blur effects and custom themes for WhatsApp Web.",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "permissions": [
     "storage",
     "unlimitedStorage",
@@ -15,7 +15,7 @@
   "content_scripts": [
     {
       "matches": ["https://web.whatsapp.com/*"],
-      "js": ["content.js", "content-patch.js", "content-repair-trigger.js"],
+      "js": ["content.js", "content-patch.js", "content-repair-trigger.js", "content-diagnostics.js"],
       "run_at": "document_idle"
     }
   ],
