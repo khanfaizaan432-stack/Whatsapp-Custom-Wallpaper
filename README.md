@@ -7,6 +7,7 @@ A Chrome/Edge extension that lets you customise WhatsApp Web with:
 - 🔲 Blur and glass effects on backgrounds, sidebars, and bubbles
 - 🔤 Custom font family and font size
 - 🎨 Header and sidebar tinting
+- 🧰 Settings backup, restore, and storage cleanup tools
 
 ---
 
@@ -68,6 +69,26 @@ Then open [WhatsApp Web](https://web.whatsapp.com) and click the extension icon 
 3. Find the per-chat wallpaper section
 4. Set your wallpaper and apply
 
+### Maintenance options
+
+The extension also includes a maintenance page for local data management:
+
+1. Open `chrome://extensions` or `edge://extensions`
+2. Find **WhatsApp Themes**
+3. Click **Details**
+4. Click **Extension options**
+
+From there you can:
+
+- view extension storage usage
+- export settings to JSON
+- import a settings backup
+- clear theme settings
+- delete locally stored video wallpapers
+- factory reset the extension
+
+Video blobs stored in IndexedDB are not included in JSON backups, so keep original video files if you want to reuse them later.
+
 ---
 
 ## 📁 Project Structure
@@ -77,6 +98,8 @@ manifest.json                  — Extension metadata, permissions, content scri
 popup.html                     — Popup UI for global and per-chat theme controls
 popup.css                      — Popup styling
 popup.js                       — Popup logic: settings, wallpaper preview, tab sync
+options.html                   — Maintenance UI for backup/import/reset tools
+options.js                     — Maintenance logic for storage cleanup and settings export/import
 content.js                     — Main WhatsApp Web styling/content script
 content-patch.js               — Defensive selector fallback and stability patch
 content-repair-trigger.js      — Re-apply trigger when WhatsApp Web re-renders major DOM regions
@@ -100,7 +123,7 @@ The validator checks:
 
 - required extension files exist
 - `manifest.json` is valid MV3 JSON
-- manifest content scripts and icons point to real files
+- manifest content scripts, popup, options page, and icons point to real files
 - JavaScript files parse without syntax errors
 - unexpected extension permissions are not introduced
 - README clone instructions point to this repository
@@ -154,9 +177,15 @@ Go to `chrome://extensions`, click **Load unpacked**, and select your installati
 </details>
 
 <details>
+<summary><strong>Storage is getting huge / videos feel slow</strong></summary>
+
+Open the extension's **Options** page from `chrome://extensions` → **Details** → **Extension options**. Use **Delete video storage** or **Factory reset** to remove locally stored video wallpapers.
+</details>
+
+<details>
 <summary><strong>WhatsApp Web updated and styling broke</strong></summary>
 
-WhatsApp occasionally changes their page structure, which can break injected styles. Reload the extension at `chrome://extensions` and refresh WhatsApp Web. The extension includes fallback/re-apply scripts, but major WhatsApp DOM changes may still require an update.
+WhatsApp occasionally changes their page structure, which can break injected styles. Reload the extension at `chrome://extensions` and refresh the WhatsApp Web tab. The extension includes fallback/re-apply scripts, but major WhatsApp DOM changes may still require an update.
 </details>
 
 ---
@@ -178,4 +207,5 @@ No data is collected or sent anywhere. Everything is stored locally in your brow
 - Works with **WhatsApp Web only** — not the desktop app
 - Wallpapers are stored locally in browser extension storage / IndexedDB, so no external files are needed
 - Large video wallpapers can consume browser storage; remove unused per-chat wallpapers if the browser feels slow
+- JSON backups include settings, but not IndexedDB video blobs
 - If WhatsApp Web updates and something breaks, reload the extension and refresh WhatsApp Web first
