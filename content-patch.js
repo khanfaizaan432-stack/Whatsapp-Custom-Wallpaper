@@ -1,9 +1,9 @@
 // =============================================================================
-// WhatsApp Themes — content-patch.js v1.2.0
+// WhatsApp Themes — content-patch.js v1.6.1
 // Runtime hardening loaded after content.js.
 //
-// This file intentionally does not replace content.js. It adds defensive fixes
-// around extension messaging, WhatsApp selector churn, and common failure paths.
+// Adds defensive fixes around extension messaging, WhatsApp selector churn,
+// common failure paths, and a forced fallback chat wallpaper layer.
 // =============================================================================
 (() => {
   'use strict';
@@ -13,9 +13,14 @@
   window[PATCH_ID] = true;
 
   const LOG_PREFIX = '[WA Themes Patch]';
+  const FORCE_BG_ID = 'wa-theme-force-bg-overlay';
+  const FORCE_BG_STYLE_ID = 'wa-theme-force-bg-style';
+  const VIDEO_DB_NAME = 'wa-themes-videos';
+  const VIDEO_STORE_NAME = 'videos';
+  const activePatchObjectUrls = new Map();
 
   const fallbackSelectors = {
-    main: ['#main', '[role="application"] main', '[data-testid="conversation-panel-wrapper"]'],
+    main: ['#main', '[data-testid="conversation-panel-wrapper"]', '[role="application"] main'],
     conversationTitle: [
       '[data-testid="conversation-info-header-chat-title"]',
       'header span[title]',
@@ -23,7 +28,12 @@
       '#main header span[dir="ltr"][title]'
     ],
     conversationHeader: ['[data-testid="conversation-header"]', '#main header'],
-    chatPanel: ['[data-testid="conversation-panel-body"]', '#main [role="application"]', '#main']
+    chatPanel: [
+      '[data-testid="conversation-panel-body"]',
+      '[data-testid="conversation-panel-wrapper"]',
+      '#main [role="application"]',
+      '#main'
+    ]
   };
 
   function firstMatch(selectors, root = document) {
@@ -123,11 +133,7 @@
     const css = [];
     const header = firstMatch(fallbackSelectors.conversationHeader);
     if (header && s.headerColor) {
-      header.style.setProperty(
-        'background-color',
-        toRgba(s.headerColor, s.convHeaderOpacity / 100),
-        'important'
-      );
+      header.style.setProperty('background-color', toRgba(s.headerColor, s.convHeaderOpacity / 100), 'important');
       const blur = Number(s.convHeaderBlur || 0);
       if (blur > 0) {
         header.style.setProperty('backdrop-filter', `blur(${blur}px) saturate(1.5)`, 'important');
@@ -136,12 +142,8 @@
     }
 
     const chatPanel = firstMatch(fallbackSelectors.chatPanel);
-    if (chatPanel && s.fontFamily) {
-      css.push(`#main span[dir], #main .copyable-text { font-family: ${s.fontFamily} !important; }`);
-    }
-    if (chatPanel && s.fontSize) {
-      css.push(`#main .copyable-text { font-size: ${Number(s.fontSize)}px !important; line-height: 1.4 !important; }`);
-    }
+    if (chatPanel && s.fontFamily) css.push(`#main span[dir], #main .copyable-text { font-family: ${s.fontFamily} !important; }`);
+    if (chatPanel && s.fontSize) css.push(`#main .copyable-text { font-size: ${Number(s.fontSize)}px !important; line-height: 1.4 !important; }`);
 
     if (css.length) {
       const style = document.createElement('style');
@@ -149,6 +151,166 @@
       style.textContent = css.join('\n');
       document.head.appendChild(style);
     }
+  }
+
+  function openVideoDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(VIDEO_DB_NAME, 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore(VIDEO_STORE_NAME);
+      req.onsuccess = e => resolve(e.target.result);
+      req.onerror = () => reject(req.error || new Error('Failed to open video database'));
+    });
+  }
+
+  async function idbGetVideo(key) {
+    const db = await openVideoDB();
+    return new Promise((resolve, reject) => {
+      const req = db.transaction(VIDEO_STORE_NAME, 'readonly').objectStore(VIDEO_STORE_NAME).get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error || new Error('Failed to read video'));
+    });
+  }
+
+  async function getPatchVideoObjectUrl(storageKey) {
+    if (!storageKey) return null;
+    if (activePatchObjectUrls.has(storageKey)) return activePatchObjectUrls.get(storageKey);
+
+    let data = await idbGetVideo(storageKey).catch(() => null);
+    if (!data) {
+      const legacy = await chrome.storage.local.get(storageKey).catch(() => ({}));
+      data = legacy?.[storageKey] || null;
+    }
+    if (!data) return null;
+
+    let buffer;
+    if (data instanceof Uint8Array) buffer = data.buffer;
+    else if (data instanceof ArrayBuffer) buffer = data;
+    else if (data?.buffer) buffer = data.buffer;
+    else buffer = new Uint8Array(Object.values(data)).buffer;
+
+    const url = URL.createObjectURL(new Blob([buffer], { type: 'video/mp4' }));
+    activePatchObjectUrls.set(storageKey, url);
+    return url;
+  }
+
+  function resolveWallpaper(globalSettings, chatWallpapers) {
+    const chatName = getCurrentChatName();
+    const perChat = chatName ? chatWallpapers?.[chatName] : null;
+
+    if (perChat?.wallpaperType === 'image' && perChat.wallpaperData) {
+      return { type: 'image', data: perChat.wallpaperData, blur: Boolean(perChat.wallpaperBlur), source: 'per-chat' };
+    }
+    if (perChat?.wallpaperType === 'video' && (perChat.wallpaperStorageKey || perChat.wallpaperData)) {
+      return {
+        type: 'video',
+        storageKey: perChat.wallpaperStorageKey,
+        data: perChat.wallpaperData,
+        blur: Boolean(perChat.wallpaperBlur),
+        source: 'per-chat'
+      };
+    }
+    if (globalSettings?.globalWallpaper) return { ...globalSettings.globalWallpaper, source: 'global' };
+    return null;
+  }
+
+  function removeForcedWallpaper() {
+    const overlay = document.getElementById(FORCE_BG_ID);
+    const video = overlay?.querySelector('video');
+    if (video) {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+    }
+    overlay?.remove();
+    document.getElementById(FORCE_BG_STYLE_ID)?.remove();
+    const main = firstMatch(fallbackSelectors.main);
+    if (main) delete main.dataset.waThemeForceBg;
+  }
+
+  async function forceWallpaperFallback(globalSettings, chatWallpapers) {
+    const s = normalizeGlobalSettings(globalSettings);
+    if (s.enabled === false) {
+      removeForcedWallpaper();
+      return;
+    }
+
+    const wallpaper = resolveWallpaper(globalSettings, chatWallpapers);
+    const main = firstMatch(fallbackSelectors.main);
+    if (!main || !wallpaper) {
+      removeForcedWallpaper();
+      return;
+    }
+
+    removeForcedWallpaper();
+    main.dataset.waThemeForceBg = '1';
+    main.style.setProperty('position', 'relative', 'important');
+    main.style.setProperty('overflow', 'hidden', 'important');
+    main.style.setProperty('background-color', 'transparent', 'important');
+
+    const overlay = document.createElement('div');
+    overlay.id = FORCE_BG_ID;
+
+    if (wallpaper.type === 'image' && wallpaper.data) {
+      overlay.style.setProperty('background-image', `url(${wallpaper.data})`, 'important');
+      overlay.style.setProperty('background-size', 'cover', 'important');
+      overlay.style.setProperty('background-position', 'center', 'important');
+      overlay.style.setProperty('background-repeat', 'no-repeat', 'important');
+      if (wallpaper.blur) {
+        overlay.style.setProperty('filter', `blur(${s.blurIntensity || 8}px)`, 'important');
+        overlay.style.setProperty('transform', 'scale(1.05)', 'important');
+      }
+    } else if (wallpaper.type === 'video') {
+      const storageKey = wallpaper.storageKey || wallpaper.idbKey;
+      const url = storageKey ? await getPatchVideoObjectUrl(storageKey) : wallpaper.data;
+      if (!url) return;
+      const video = document.createElement('video');
+      video.src = url;
+      video.autoplay = true;
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.style.cssText = `position:absolute;inset:0;width:100%;height:100%;object-fit:cover;${wallpaper.blur ? `filter:blur(${s.blurIntensity || 8}px);transform:scale(1.05);` : ''}`;
+      overlay.appendChild(video);
+      video.play?.().catch(() => {});
+    }
+
+    main.insertBefore(overlay, main.firstChild);
+
+    const style = document.createElement('style');
+    style.id = FORCE_BG_STYLE_ID;
+    style.textContent = `
+      #${FORCE_BG_ID} {
+        position: absolute !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        z-index: 0 !important;
+        pointer-events: none !important;
+        overflow: hidden !important;
+      }
+      #main[data-wa-theme-force-bg="1"] > *:not(#${FORCE_BG_ID}) {
+        position: relative !important;
+        z-index: 1 !important;
+      }
+      #main[data-wa-theme-force-bg="1"],
+      #main[data-wa-theme-force-bg="1"] > div,
+      #main[data-wa-theme-force-bg="1"] > div > div,
+      #main[data-wa-theme-force-bg="1"] [data-testid="conversation-panel-wrapper"],
+      #main[data-wa-theme-force-bg="1"] [data-testid="conversation-panel-body"],
+      #main[data-wa-theme-force-bg="1"] [data-testid="conversation-background-default_chat_wallpaper"],
+      #main[data-wa-theme-force-bg="1"] [role="application"] {
+        background-color: transparent !important;
+        background-image: none !important;
+      }
+      #main[data-wa-theme-force-bg="1"] .message-in,
+      #main[data-wa-theme-force-bg="1"] .message-out,
+      #main[data-wa-theme-force-bg="1"] .message-in *,
+      #main[data-wa-theme-force-bg="1"] .message-out * {
+        background-image: initial;
+      }
+    `;
+    document.head.appendChild(style);
+    console.log(LOG_PREFIX, `forced chat wallpaper fallback applied (${wallpaper.source || 'unknown'} ${wallpaper.type})`);
   }
 
   async function normalizeStoredGlobalSettings() {
@@ -165,18 +327,24 @@
 
   async function reapplyFallbacks() {
     try {
-      const { globalSettings } = await getSettingsFromStorage();
+      const { globalSettings, chatWallpapers } = await getSettingsFromStorage();
       ensureFallbackStyling(globalSettings);
+      await forceWallpaperFallback(globalSettings, chatWallpapers);
     } catch (err) {
       console.warn(LOG_PREFIX, 'fallback reapply failed:', err);
     }
   }
 
-  // Popup/content compatibility helpers.
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (!msg) return false;
     if (msg.type === 'GET_CURRENT_CHAT_SAFE') {
       sendResponse({ chatName: getCurrentChatName() });
+      return true;
+    }
+    if (msg.type === 'FORCE_WA_THEME_WALLPAPER') {
+      reapplyFallbacks()
+        .then(() => sendResponse({ ok: true, chatName: getCurrentChatName() }))
+        .catch(error => sendResponse({ ok: false, error: String(error) }));
       return true;
     }
     if (msg.type === 'NORMALIZE_WA_THEME_STORAGE') {
@@ -203,7 +371,7 @@
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.globalSettings) debouncedReapply();
+    if (area === 'local' && (changes.globalSettings || changes.chatWallpapers)) debouncedReapply();
   });
 
   normalizeStoredGlobalSettings();
