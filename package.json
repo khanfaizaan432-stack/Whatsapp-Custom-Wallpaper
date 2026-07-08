@@ -1,0 +1,14 @@
+{
+  "name": "whatsapp-custom-wallpaper",
+  "version": "1.1.1",
+  "private": true,
+  "description": "Chrome/Edge extension for WhatsApp Web themes, wallpapers, and chat styling.",
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate-extension.mjs",
+    "test": "npm run validate"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
