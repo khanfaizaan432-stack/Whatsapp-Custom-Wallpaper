@@ -2,6 +2,21 @@
 
 All notable changes to this extension are tracked here.
 
+## 1.6.2
+
+### Added
+
+- Popup diagnostics panel with content-script connection status.
+- Force wallpaper reapply button in the popup.
+- Refresh diagnostics button.
+- Copy diagnostics JSON button.
+- `content-diagnostics.js` endpoint for runtime status reporting.
+
+### Changed
+
+- Manifest now loads `content-diagnostics.js` after the existing content scripts.
+- Validator now checks diagnostics files, popup wiring, manifest wiring, and diagnostics message hooks.
+
 ## 1.6.1
 
 ### Fixed
