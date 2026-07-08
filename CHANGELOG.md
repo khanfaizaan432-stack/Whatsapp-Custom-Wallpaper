@@ -2,6 +2,21 @@
 
 All notable changes to this extension are tracked here.
 
+## 1.9.0
+
+### Added
+
+- `popup-theme-library.js` for a local user theme library.
+- Save current theme, apply saved themes, delete saved themes, and import/export theme library JSON.
+- Storage cleanup action for unused IndexedDB video blobs.
+- Richer preset-card swatches for built-in theme presets.
+- Break-risk review document for the current patch-based architecture.
+
+### Changed
+
+- `popup-wallpaper-controls.js` now dynamically loads the theme library layer.
+- Validator now checks theme-library script presence, storage cleanup markers, and preset-card styling markers.
+
 ## 1.8.0
 
 ### Added
