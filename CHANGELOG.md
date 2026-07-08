@@ -2,6 +2,14 @@
 
 All notable changes to this extension are tracked here.
 
+## 1.6.1
+
+### Fixed
+
+- Added a forced chat wallpaper fallback layer in `content-patch.js` for WhatsApp Web DOM changes where the popup preview updates but the actual chat background stays black or hidden.
+- Re-applies wallpaper fallback when either global settings or per-chat wallpaper settings change.
+- Adds a `FORCE_WA_THEME_WALLPAPER` message hook for manual recovery/debugging.
+
 ## 1.6.0
 
 ### Added
