@@ -5,6 +5,7 @@ import vm from 'node:vm';
 const root = process.cwd();
 const requiredFiles = [
   'manifest.json',
+  'package.json',
   'popup.html',
   'popup.css',
   'popup.js',
@@ -38,10 +39,12 @@ for (const file of requiredFiles) {
 }
 
 const manifest = readJson('manifest.json');
+const packageJson = readJson('package.json');
+
 if (manifest) {
   if (manifest.manifest_version !== 3) fail('manifest_version must be 3');
   if (!manifest.name) fail('manifest.name is required');
-  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.1.1');
+  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.2.0');
 
   const scripts = manifest.content_scripts?.flatMap(entry => entry.js || []) || [];
   for (const script of scripts) {
@@ -64,6 +67,10 @@ if (manifest) {
   for (const permission of manifest.permissions || []) {
     if (!allowedPermissions.has(permission)) fail(`Unexpected permission: ${permission}`);
   }
+}
+
+if (manifest && packageJson && manifest.version !== packageJson.version) {
+  fail(`manifest.json version (${manifest.version}) must match package.json version (${packageJson.version})`);
 }
 
 for (const file of ['popup.js', 'content.js', 'content-patch.js', 'content-repair-trigger.js', 'background.js']) {
