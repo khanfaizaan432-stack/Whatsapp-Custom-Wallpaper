@@ -1,6 +1,6 @@
 // =============================================================================
-// WhatsApp Themes — content-sidebar-fallback.js v1.7.1
-// Conservative fallback for WhatsApp Web side-panel styling.
+// WhatsApp Themes — content-sidebar-fallback.js v1.7.2
+// Stronger fallback for WhatsApp Web side-panel image/video backgrounds.
 // =============================================================================
 (() => {
   'use strict';
@@ -8,6 +8,7 @@
   const SCRIPT_ID = 'wa-theme-sidebar-fallback-script';
   const STYLE_ID = 'wa-theme-sidebar-fallback-style';
   const OVERLAY_ID = 'wa-theme-sidebar-fallback-overlay';
+  const TINT_ID = 'wa-theme-sidebar-fallback-tint';
   const VIDEO_ID = 'wa-theme-sidebar-fallback-video';
   const DB_NAME = 'wa-themes-videos';
   const STORE_NAME = 'videos';
@@ -19,30 +20,44 @@
 
   const sidebarSelectors = [
     '#side',
+    '[data-testid="side"]',
     '[data-testid="chat-list"]',
     '[data-testid="conversation-list"]',
     '[aria-label="Chat list"]',
-    '[role="grid"]',
+    '[aria-label="Chats"]',
     'div[aria-label="Chats"]',
+    '[role="grid"]',
   ];
 
-  function firstMatch(selectors) {
-    for (const selector of selectors) {
+  function getSidebarCandidate() {
+    for (const selector of sidebarSelectors) {
       const el = document.querySelector(selector);
       if (el) return { el, selector };
     }
     return { el: null, selector: null };
   }
 
+  function rectLooksLikeSidebar(rect) {
+    const width = window.innerWidth || document.documentElement.clientWidth || 1200;
+    const height = window.innerHeight || document.documentElement.clientHeight || 800;
+    return rect.width >= 220 && rect.width <= Math.max(520, width * 0.48) && rect.height >= height * 0.65 && rect.left <= width * 0.35;
+  }
+
   function getSidebarRoot() {
     const direct = document.querySelector('#side');
     if (direct) return { el: direct, selector: '#side' };
 
-    const match = firstMatch(sidebarSelectors);
+    const match = getSidebarCandidate();
     if (!match.el) return match;
 
-    const parent = match.el.closest('#side, [role="region"], [data-testid="side"], div') || match.el;
-    return { el: parent, selector: match.selector };
+    let node = match.el;
+    let best = match.el;
+    while (node && node !== document.body && node !== document.documentElement) {
+      const rect = node.getBoundingClientRect?.();
+      if (rect && rectLooksLikeSidebar(rect)) best = node;
+      node = node.parentElement;
+    }
+    return { el: best, selector: match.selector };
   }
 
   function toRgba(hex, opacityPercent) {
@@ -82,18 +97,19 @@
   function clearSidebarFallback(root) {
     document.getElementById(STYLE_ID)?.remove();
     document.getElementById(OVERLAY_ID)?.remove();
+    document.getElementById(TINT_ID)?.remove();
     root?.removeAttribute('data-wa-sidebar-fallback');
   }
 
-  function ensureOverlay(root) {
-    let overlay = document.getElementById(OVERLAY_ID);
-    if (!overlay || overlay.parentElement !== root) {
-      overlay?.remove();
-      overlay = document.createElement('div');
-      overlay.id = OVERLAY_ID;
-      root.insertBefore(overlay, root.firstChild);
+  function ensureLayer(root, id) {
+    let layer = document.getElementById(id);
+    if (!layer || layer.parentElement !== root) {
+      layer?.remove();
+      layer = document.createElement('div');
+      layer.id = id;
+      root.insertBefore(layer, root.firstChild);
     }
-    return overlay;
+    return layer;
   }
 
   async function applySidebarFallback() {
@@ -105,23 +121,33 @@
       return false;
     }
 
+    const wallpaper = settings.sidebarWallpaper;
+    const hasImage = wallpaper?.type === 'image' && Boolean(wallpaper.data);
+    const hasVideo = wallpaper?.type === 'video' && Boolean(wallpaper.data || wallpaper.storageKey || wallpaper.idbKey);
+    const hasWallpaper = hasImage || hasVideo;
+
     root.dataset.waSidebarFallback = '1';
     root.style.setProperty('position', 'relative', 'important');
     root.style.setProperty('overflow', 'hidden', 'important');
+    root.style.setProperty('isolation', 'isolate', 'important');
+    root.style.setProperty('background-color', 'transparent', 'important');
+    root.style.setProperty('background-image', 'none', 'important');
 
-    const wallpaper = settings.sidebarWallpaper;
-    const hasWallpaper = wallpaper && (wallpaper.type === 'image' || wallpaper.type === 'video');
-    const overlay = ensureOverlay(root);
+    const overlay = ensureLayer(root, OVERLAY_ID);
     overlay.innerHTML = '';
     overlay.removeAttribute('style');
-    overlay.style.cssText = 'position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:transparent;';
+    overlay.style.cssText = [
+      'position:absolute', 'inset:0', 'z-index:0', 'pointer-events:none', 'overflow:hidden',
+      `background:${settings.sidebarColor || '#111b21'}`, 'background-size:cover',
+      'background-position:center', 'background-repeat:no-repeat'
+    ].join(';');
 
-    if (hasWallpaper && wallpaper.type === 'image' && wallpaper.data) {
+    if (hasImage) {
       overlay.style.setProperty('background-image', `url(${wallpaper.data})`, 'important');
       overlay.style.setProperty('background-size', 'cover', 'important');
       overlay.style.setProperty('background-position', 'center', 'important');
       overlay.style.setProperty('background-repeat', 'no-repeat', 'important');
-    } else if (hasWallpaper && wallpaper.type === 'video') {
+    } else if (hasVideo) {
       const key = wallpaper.storageKey || wallpaper.idbKey;
       const src = wallpaper.data || await getVideoBlobUrl(key).catch(() => null);
       if (src) {
@@ -136,56 +162,57 @@
         overlay.appendChild(video);
         video.play?.().catch(() => {});
       }
-    } else {
-      overlay.style.setProperty('background', settings.sidebarColor || '#111b21', 'important');
     }
 
+    const tintLayer = ensureLayer(root, TINT_ID);
     const tint = toRgba(settings.sidebarTintColor || '#111b21', settings.sidebarTintOpacity || 0);
+    const blur = settings.blurSidebar ? `blur(${Number(settings.sidebarBlurIntensity || 8)}px)` : 'none';
+    tintLayer.style.cssText = [
+      'position:absolute', 'inset:0', 'z-index:1', 'pointer-events:none',
+      `background:${tint}`, `backdrop-filter:${blur}`, `-webkit-backdrop-filter:${blur}`
+    ].join(';');
+
     const nav = toRgba(settings.navStripColor || '#202c33', settings.navStripOpacity ?? 100);
     const header = toRgba(settings.chatlistHeaderColor || '#202c33', settings.chatlistHeaderOpacity ?? 100);
     const card = toRgba(settings.chatCardBgColor || '#1d1f1f', settings.chatCardOpacity ?? 100);
-    const blur = settings.blurSidebar ? `blur(${Number(settings.sidebarBlurIntensity || 8)}px)` : 'none';
 
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      [data-wa-sidebar-fallback="1"] > *:not(#${OVERLAY_ID}) {
+      [data-wa-sidebar-fallback="1"] > *:not(#${OVERLAY_ID}):not(#${TINT_ID}) {
         position: relative !important;
-        z-index: 1 !important;
+        z-index: 2 !important;
       }
-      [data-wa-sidebar-fallback="1"]::after {
-        content: "" !important;
-        position: absolute !important;
-        inset: 0 !important;
-        z-index: 0 !important;
-        pointer-events: none !important;
-        background: ${tint} !important;
-        backdrop-filter: ${blur} !important;
-        -webkit-backdrop-filter: ${blur} !important;
-      }
-      #side, #side > div, #side [role="grid"], #side [aria-label="Chat list"], #side [data-testid="chat-list"], #side [data-testid="conversation-list"] {
+      [data-wa-sidebar-fallback="1"],
+      [data-wa-sidebar-fallback="1"] > div,
+      [data-wa-sidebar-fallback="1"] [role="grid"],
+      [data-wa-sidebar-fallback="1"] [role="list"],
+      [data-wa-sidebar-fallback="1"] [aria-label="Chat list"],
+      [data-wa-sidebar-fallback="1"] [aria-label="Chats"],
+      [data-wa-sidebar-fallback="1"] [data-testid="chat-list"],
+      [data-wa-sidebar-fallback="1"] [data-testid="conversation-list"] {
         background-color: transparent !important;
         background-image: none !important;
       }
-      #side header,
-      #side [data-testid="chat-list-header"],
-      #side [data-testid="side-bar-header"] {
+      [data-wa-sidebar-fallback="1"] header,
+      [data-wa-sidebar-fallback="1"] [data-testid="chat-list-header"],
+      [data-wa-sidebar-fallback="1"] [data-testid="side-bar-header"] {
         background: ${header} !important;
       }
-      #side nav,
-      #side [aria-label="Main navigation"],
-      #side [data-testid="navigation-side-bar"] {
+      [data-wa-sidebar-fallback="1"] nav,
+      [data-wa-sidebar-fallback="1"] [aria-label="Main navigation"],
+      [data-wa-sidebar-fallback="1"] [data-testid="navigation-side-bar"] {
         background: ${nav} !important;
       }
-      #side [role="listitem"],
-      #side [role="row"],
-      #side [data-testid="cell-frame-container"] {
+      [data-wa-sidebar-fallback="1"] [role="listitem"],
+      [data-wa-sidebar-fallback="1"] [role="row"],
+      [data-wa-sidebar-fallback="1"] [data-testid="cell-frame-container"] {
         background: ${card} !important;
       }
     `;
     document.getElementById(STYLE_ID)?.remove();
     document.head.appendChild(style);
-    console.log('[WA Themes Sidebar Fallback] applied', selector);
+    console.log('[WA Themes Sidebar Fallback] applied', { selector, hasWallpaper, type: wallpaper?.type || null, root: root.tagName });
     return true;
   }
 
