@@ -71,7 +71,7 @@ const packageJson = readJson('package.json');
 if (manifest) {
   if (manifest.manifest_version !== 3) fail('manifest_version must be 3');
   if (!manifest.name) fail('manifest.name is required');
-  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.7.1');
+  if (!/^\d+\.\d+\.\d+$/.test(manifest.version || '')) fail('manifest.version must be semver-like, e.g. 1.7.2');
 
   const scripts = manifest.content_scripts?.flatMap(entry => entry.js || []) || [];
   for (const script of scripts) {
@@ -151,7 +151,7 @@ const contentDiagnostics = fs.existsSync(path.join(root, 'content-diagnostics.js
 if (!contentDiagnostics.includes('GET_WA_THEME_DIAGNOSTICS')) fail('content-diagnostics.js must handle GET_WA_THEME_DIAGNOSTICS');
 
 const sidebarFallback = fs.existsSync(path.join(root, 'content-sidebar-fallback.js')) ? read('content-sidebar-fallback.js') : '';
-for (const expected of ['FORCE_WA_THEME_SIDEBAR', 'wa-theme-sidebar-fallback-overlay', 'sidebarWallpaper', '#side']) {
+for (const expected of ['FORCE_WA_THEME_SIDEBAR', 'wa-theme-sidebar-fallback-overlay', 'wa-theme-sidebar-fallback-tint', 'sidebarWallpaper', 'rectLooksLikeSidebar']) {
   if (!sidebarFallback.includes(expected)) fail(`content-sidebar-fallback.js must implement ${expected}`);
 }
 
