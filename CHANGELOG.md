@@ -2,6 +2,15 @@
 
 All notable changes to this extension are tracked here.
 
+## 1.7.2
+
+### Fixed
+
+- Strengthened `content-sidebar-fallback.js` so sidebar image/video wallpaper does not depend on `#side`-only selectors.
+- Sidebar fallback now detects the actual left-panel root by screen position and dimensions.
+- Adds separate background and tint layers so image wallpaper is not hidden behind the tint/fog layer.
+- Makes the detected sidebar root and its chat-list descendants transparent so the background image can show through.
+
 ## 1.7.1
 
 ### Fixed
